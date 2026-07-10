@@ -1,0 +1,56 @@
+{
+  "name": "@qarar/sdk",
+  "version": "0.0.1",
+  "description": "Single-package Qarar SDK (spec + engine + explainability)",
+  "keywords": [
+    "rules-engine",
+    "business-rules",
+    "decision-engine",
+    "typescript"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./spec": {
+      "import": "./dist/spec.js",
+      "types": "./dist/spec.d.ts"
+    },
+    "./engine": {
+      "import": "./dist/engine.js",
+      "types": "./dist/engine.d.ts"
+    },
+    "./explainability": {
+      "import": "./dist/explainability.js",
+      "types": "./dist/explainability.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsc -p tsconfig.json --watch",
+    "test": "vitest run",
+    "prepublishOnly": "pnpm run build && pnpm run test"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@qarar/spec": "workspace:*",
+    "@qarar/engine-js": "workspace:*",
+    "@qarar/explainability": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

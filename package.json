@@ -1,0 +1,19 @@
+{
+  "name": "qarar",
+  "private": true,
+  "version": "0.0.1",
+  "packageManager": "pnpm@9.1.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "publish:sdk:check": "pnpm --filter @qarar/sdk build && pnpm --filter @qarar/sdk test",
+    "publish:sdk": "pnpm run publish:sdk:check && pnpm --filter @qarar/sdk publish --access public"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}

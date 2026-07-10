@@ -39,10 +39,10 @@ const BRAND_NAME = "Qarar";
 const THEME_STORAGE_KEY = "qarar.theme.v1";
 const VERSION_STORAGE_KEY = "qarar.version.v1";
 const VERSIONED_EXAMPLES: Record<string, typeof EXAMPLES> = {
-  "0.0.1": EXAMPLES,
+  "0.0.2": EXAMPLES,
 };
 const AVAILABLE_VERSIONS = Object.keys(VERSIONED_EXAMPLES);
-const DEFAULT_VERSION = AVAILABLE_VERSIONS[0] ?? "0.0.1";
+const DEFAULT_VERSION = AVAILABLE_VERSIONS[0] ?? "0.0.2";
 
 type AppSection = "landing" | "install" | "docs" | "playground";
 type RuleTab = "builder" | "json";

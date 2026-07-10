@@ -4,7 +4,7 @@ export {
   ValueNodeSchema,
   validateRule,
   safeValidateRule,
-} from "@qarar/spec";
+} from "./spec.js";
 export type {
   Rule,
   RuleNode,
@@ -12,9 +12,9 @@ export type {
   ComparisonOp,
   ComparisonNode,
   BetweenNode,
-} from "@qarar/spec";
+} from "./spec.js";
 
-export { evaluate } from "@qarar/engine-js";
-export type { EvaluationResult, TraceEntry } from "@qarar/engine-js";
+export { evaluate } from "./engine.js";
+export type { EvaluationResult, TraceEntry } from "./engine.js";
 
-export { explainFailures } from "@qarar/explainability";
+export { explain, explainFailures } from "./explainability.js";

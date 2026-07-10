@@ -50,6 +50,7 @@ const failures = explainFailures(result.trace);
 ```bash
 pnpm run publish:sdk:check
 pnpm run publish:sdk
+pnpm run smoke:sdk:published
 ```
 
 > Note: SQL and Mongo compilers are internal packages and are not part of the public SDK surface.

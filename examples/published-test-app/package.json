@@ -1,0 +1,12 @@
+{
+  "name": "qarar-published-test-app",
+  "private": true,
+  "version": "0.0.2",
+  "type": "module",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@qarar/sdk": "^0.0.2"
+  }
+}

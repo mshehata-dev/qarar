@@ -1,7 +1,7 @@
 {
   "name": "qarar",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.0.2",
   "packageManager": "pnpm@9.1.0",
   "scripts": {
     "build": "turbo run build",
@@ -10,7 +10,8 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "publish:sdk:check": "pnpm --filter @qarar/sdk build && pnpm --filter @qarar/sdk test",
-    "publish:sdk": "pnpm run publish:sdk:check && pnpm --filter @qarar/sdk publish --access public"
+    "smoke:sdk:published": "cd examples/published-test-app && rm -rf node_modules package-lock.json && npm install && npm start",
+    "publish:sdk": "pnpm run publish:sdk:check && pnpm --filter @qarar/sdk publish --access public && pnpm run smoke:sdk:published"
   },
   "devDependencies": {
     "turbo": "^2.3.3",

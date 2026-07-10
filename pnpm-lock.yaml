@@ -145,15 +145,9 @@ importers:
 
   packages/sdk:
     dependencies:
-      '@qarar/engine-js':
-        specifier: workspace:*
-        version: link:../engine-js
-      '@qarar/explainability':
-        specifier: workspace:*
-        version: link:../explainability
-      '@qarar/spec':
-        specifier: workspace:*
-        version: link:../spec
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
       typescript:
         specifier: ^5.7.2

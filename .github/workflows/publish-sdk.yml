@@ -3,6 +3,10 @@ name: Publish SDK to npm
 on:
   workflow_dispatch:
     inputs:
+      version:
+        description: 'Version to publish (e.g., 0.0.3)'
+        required: true
+        type: string
       dry_run:
         description: 'Dry run (skip actual npm publish)'
         required: false
@@ -22,6 +26,56 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+      - name: Validate version format
+        run: |
+          VERSION="${{ inputs.version }}"
+          if ! [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "❌ Invalid version format: $VERSION"
+            echo "Use format: major.minor.patch (e.g., 0.0.3)"
+            exit 1
+          fi
+          echo "✅ Version format valid: $VERSION"
+
+      - name: Bump package versions
+        run: |
+          VERSION="${{ inputs.version }}"
+          echo "📦 Bumping all packages to version $VERSION"
+          
+          # Root package.json
+          npm version --no-git-tag-version --allow-same-version $VERSION
+          
+          # Workspace packages
+          for pkg_dir in packages/*/; do
+            (cd "$pkg_dir" && npm version --no-git-tag-version --allow-same-version $VERSION)
+          done
+          
+          # Apps
+          for app_dir in apps/*/; do
+            (cd "$app_dir" && npm version --no-git-tag-version --allow-same-version $VERSION)
+          done
+          
+          # Examples
+          for ex_dir in examples/*/; do
+            (cd "$ex_dir" && npm version --no-git-tag-version --allow-same-version $VERSION)
+          done
+          
+          echo "✅ All packages bumped to $VERSION"
+
+      - name: Commit version bump
+        if: ${{ inputs.dry_run == 'false' }}
+        run: |
+          VERSION="${{ inputs.version }}"
+          git add -A
+          git commit -m "Bump version to $VERSION" --allow-empty
+          git push
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -77,21 +131,25 @@ jobs:
       - name: Success summary
         if: ${{ inputs.dry_run == 'false' && success() }}
         run: |
+          VERSION="${{ inputs.version }}"
           echo "✅ SDK published successfully to npm"
           echo ""
-          echo "📦 Package: @qarar/sdk"
-          echo "🔗 URL: https://www.npmjs.com/package/@qarar/sdk"
+          echo "📦 Package: @qarar/sdk@$VERSION"
+          echo "🔗 URL: https://www.npmjs.com/package/@qarar/sdk/v/$VERSION"
           echo ""
           echo "📖 View on npm to confirm README and version"
 
       - name: Dry run summary
         if: ${{ inputs.dry_run == 'true' }}
         run: |
+          VERSION="${{ inputs.version }}"
           echo "✅ Dry run completed successfully"
           echo ""
           echo "All checks passed:"
           echo "  ✓ Dependencies installed"
           echo "  ✓ Build completed"
           echo "  ✓ Tests passed"
+          echo ""
+          echo "Version that would be published: @qarar/sdk@$VERSION"
           echo ""
           echo "To publish for real, re-run without dry run flag"

@@ -649,48 +649,13 @@ console.log(result.passed);
 
 Qarar is designed for **production** use:
 
-- **Lightweight**: < 50KB minified
-- **Zero dependencies** (browser-safe): Only `zod` for validation
-- **Fast evaluation**: Typical rules evaluate in < 1ms
-- **Scalable**: No I/O, no external calls—pure local computation
-- **No memory leaks**: Immutable, garbage-collectible trace objects
+- **Lightweight**: Pure JavaScript, minimal dependencies
+- **Zero external dependencies** (browser-safe): Only `zod` for validation
+- **Fast evaluation**: No I/O, no external calls—pure local computation
+- **Scalable**: Immutable, garbage-collectible trace objects
+- **No memory leaks**: Safe for long-running processes
 
-**Benchmarks** (rule with 5 conditions):
-- Validation: ~0.1ms
-- Evaluation: ~0.2ms
-- Explain failures: ~0.1ms
-- **Total**: ~0.4ms per decision
-
----
-
-## Versioning
-
-Qarar follows semantic versioning:
-
-### Current Stable Release
-- **@qarar/sdk@0.0.2**
-
-### Compatibility
-- Versions are **immutable** (all docs/examples are per-version)
-- **Breaking changes** increment major version (1.0, 2.0, etc.)
-- **New features** increment minor version (0.1, 0.2, etc.)
-- **Bug fixes** increment patch version (0.0.1, 0.0.2, etc.)
-
-### Accessing Previous Versions
-
-```bash
-npm install @qarar/sdk@0.0.1
-npm install @qarar/sdk@0.0.2  # Latest stable
-```
-
-Or in package.json:
-```json
-{
-  "dependencies": {
-    "@qarar/sdk": "^0.0.2"  // 0.0.2 - 0.0.x
-  }
-}
-```
+For production benchmarks and performance tuning, test with your actual rule complexity and data volume.
 
 ---
 
@@ -730,21 +695,3 @@ console.log(result.passed); // false (undefined != "admin")
 ```
 
 ---
-
-## License
-
-MIT — See LICENSE in repository root.
-
----
-
-## Contributing
-
-Issues, feature requests, and PRs welcome at [github.com/mshehata-dev/qarar](https://github.com/mshehata-dev/qarar).
-
----
-
-## Related
-
-- **Playground**: Try rules interactively at [playground.qarar.dev](https://playground.qarar.dev)
-- **GitHub**: [mshehata-dev/qarar](https://github.com/mshehata-dev/qarar)
-- **Docs**: Full technical docs in playground app

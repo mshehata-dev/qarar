@@ -19,11 +19,11 @@
 4. [Basic Usage](#basic-usage)
 5. [Advanced Usage](#advanced-usage)
 6. [API Reference](#api-reference)
-7. [Rule Structure](#rule-structure)
+7. [Rule Syntax](#rule-syntax)
 8. [Examples](#examples)
 9. [Browser & Node.js](#browser--nodejs)
 10. [Performance](#performance)
-11. [Versioning](#versioning)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -32,12 +32,20 @@
 ```ts
 import { safeValidateRule, evaluate, explainFailures } from "@qarar/sdk";
 
-// Define a rule
+// Define a rule: age >= 18 AND credit_score >= 650
 const rule = {
-  operator: "AND",
-  operands: [
-    { field: "age", operator: ">=", value: 18 },
-    { field: "credit_score", operator: ">=", value: 650 }
+  type: "and",
+  conditions: [
+    {
+      type: "gte",
+      left: { type: "field", path: "age" },
+      right: { type: "number", value: 18 }
+    },
+    {
+      type: "gte",
+      left: { type: "field", path: "credit_score" },
+      right: { type: "number", value: 650 }
+    }
   ]
 };
 
@@ -80,33 +88,33 @@ Rules are plain JSON, making them:
 - **Debuggable** with execution traces
 - **Auditable** for compliance (why did this decision fail?)
 
+### Conditions & Operators
+
+Rules evaluate **conditions** using **comparison operators**:
+- `eq`: Equals
+- `neq`: Not equals
+- `gt`, `gte`, `lt`, `lte`: Numeric comparisons
+- `in`: Value in array
+- `notIn`: Value not in array
+- `contains`, `notContains`: String substring
+- `startsWith`, `endsWith`: String prefix/suffix
+- `matches`, `notMatches`: Regex patterns
+- `isNull`, `isNotNull`: Nullability checks
+- `between`: Value between min and max
+
 ### Boolean Logic
 
-Rules support:
-- **AND**: All operands must pass
-- **OR**: At least one operand must pass
-- **NOT**: Inverts a condition
+Rules support combining conditions with boolean operators:
+- `and`: All conditions must pass
+- `or`: At least one condition must pass
+- `not`: Invert a condition
 
 Operators can be nested to arbitrary depth for complex logic.
-
-### Operators
-
-Comparison operators:
-- `==`: Equals
-- `!=`: Not equals
-- `<`, `<=`, `>`, `>=`: Numeric comparisons
-- `in`: Value in array (e.g., `{ field: "status", operator: "in", value: ["active", "pending"] }`)
-- `notIn`: Value not in array
-- `contains`: String contains substring
-- `startsWith`: String starts with prefix
-- `endsWith`: String ends with suffix
-- `isEmpty`: Field is empty/null (no value needed)
-- `isNotEmpty`: Field is not empty/null
 
 ### Explainability
 
 Every rule evaluation produces a **trace** showing:
-- Which operands passed/failed
+- Which conditions passed/failed
 - Actual vs. expected values
 - Nested condition details
 
@@ -156,10 +164,9 @@ yarn add @qarar/sdk
 import { safeValidateRule } from "@qarar/sdk";
 
 const rule = {
-  operator: "AND",
-  operands: [
-    { field: "age", operator: ">=", value: 18 }
-  ]
+  type: "eq",
+  left: { type: "field", path: "status" },
+  right: { type: "string", value: "active" }
 };
 
 const result = safeValidateRule(rule);
@@ -180,10 +187,18 @@ if (result.success) {
 import { safeValidateRule, evaluate } from "@qarar/sdk";
 
 const rule = {
-  operator: "AND",
-  operands: [
-    { field: "age", operator: ">=", value: 18 },
-    { field: "status", operator: "==", value: "active" }
+  type: "and",
+  conditions: [
+    {
+      type: "gte",
+      left: { type: "field", path: "age" },
+      right: { type: "number", value: 18 }
+    },
+    {
+      type: "eq",
+      left: { type: "field", path: "status" },
+      right: { type: "string", value: "active" }
+    }
   ]
 };
 
@@ -198,7 +213,7 @@ const result = evaluate(parsed.data, {
 console.log(result);
 // {
 //   passed: true,
-//   trace: { operator: "AND", operands: [...], passed: true }
+//   trace: { type: "and", conditions: [...], passed: true }
 // }
 ```
 
@@ -208,10 +223,18 @@ console.log(result);
 import { explainFailures } from "@qarar/sdk";
 
 const rule = {
-  operator: "AND",
-  operands: [
-    { field: "age", operator: ">=", value: 18 },
-    { field: "credit_score", operator: ">=", value: 700 }
+  type: "and",
+  conditions: [
+    {
+      type: "gte",
+      left: { type: "field", path: "age" },
+      right: { type: "number", value: 18 }
+    },
+    {
+      type: "gte",
+      left: { type: "field", path: "credit_score" },
+      right: { type: "number", value: 700 }
+    }
   ]
 };
 
@@ -224,43 +247,49 @@ const result = evaluate(rule, {
 
 const reasons = explainFailures(result.trace);
 console.log(reasons);
-// Output:
-// [
-//   "age >= 18: expected >= 18, got 16",
-//   "credit_score >= 700: expected >= 700, got 650"
-// ]
+// Output explains which conditions failed
 ```
 
 ---
 
 ## Advanced Usage
 
-### Nested Logic
-
-Rules can be nested to any depth:
+### Nested Logic (OR inside AND)
 
 ```ts
 const rule = {
-  operator: "AND",
-  operands: [
+  type: "and",
+  conditions: [
     // Condition 1: Age check
-    { field: "age", operator: ">=", value: 18 },
-    
+    {
+      type: "gte",
+      left: { type: "field", path: "age" },
+      right: { type: "number", value: 18 }
+    },
     // Condition 2: Credit check OR income check
     {
-      operator: "OR",
-      operands: [
-        { field: "credit_score", operator: ">=", value: 700 },
-        { field: "annual_income", operator: ">=", value: 50000 }
+      type: "or",
+      conditions: [
+        {
+          type: "gte",
+          left: { type: "field", path: "credit_score" },
+          right: { type: "number", value: 700 }
+        },
+        {
+          type: "gte",
+          left: { type: "field", path: "annual_income" },
+          right: { type: "number", value: 50000 }
+        }
       ]
     },
-    
     // Condition 3: NOT flagged for fraud
     {
-      operator: "NOT",
-      operands: [
-        { field: "fraud_flag", operator: "==", value: true }
-      ]
+      type: "not",
+      condition: {
+        type: "eq",
+        left: { type: "field", path: "fraud_flag" },
+        right: { type: "boolean", value: true }
+      }
     }
   ]
 };
@@ -268,21 +297,33 @@ const rule = {
 
 ### Array Operations
 
-Check if a field is in or not in an array:
-
 ```ts
 const rule = {
-  operator: "AND",
-  operands: [
+  type: "and",
+  conditions: [
     {
-      field: "status",
-      operator: "in",
-      value: ["active", "pending", "review"]
+      type: "in",
+      left: { type: "field", path: "status" },
+      right: {
+        type: "array",
+        values: [
+          { type: "string", value: "active" },
+          { type: "string", value: "pending" },
+          { type: "string", value: "review" }
+        ]
+      }
     },
     {
-      field: "country",
-      operator: "notIn",
-      value: ["US", "UK", "CA"] // Exclude certain countries
+      type: "notIn",
+      left: { type: "field", path: "country" },
+      right: {
+        type: "array",
+        values: [
+          { type: "string", value: "US" },
+          { type: "string", value: "UK" },
+          { type: "string", value: "CA" }
+        ]
+      }
     }
   ]
 };
@@ -292,24 +333,35 @@ const rule = {
 
 ```ts
 const rule = {
-  operator: "AND",
-  operands: [
-    { field: "email", operator: "endsWith", value: "@company.com" },
-    { field: "username", operator: "startsWith", value: "admin_" },
-    { field: "name", operator: "contains", value: "John" }
+  type: "and",
+  conditions: [
+    {
+      type: "endsWith",
+      left: { type: "field", path: "email" },
+      right: { type: "string", value: "@company.com" }
+    },
+    {
+      type: "startsWith",
+      left: { type: "field", path: "username" },
+      right: { type: "string", value: "admin_" }
+    },
+    {
+      type: "contains",
+      left: { type: "field", path: "name" },
+      right: { type: "string", value: "John" }
+    }
   ]
 };
 ```
 
-### Nullability Checks
+### Between Check
 
 ```ts
 const rule = {
-  operator: "AND",
-  operands: [
-    { field: "email", operator: "isNotEmpty" }, // Must have email
-    { field: "phone", operator: "isEmpty" }     // Phone must be empty
-  ]
+  type: "between",
+  left: { type: "field", path: "age" },
+  min: { type: "number", value: 18 },
+  max: { type: "number", value: 65 }
 };
 ```
 
@@ -320,20 +372,18 @@ const result = evaluate(rule, data);
 
 console.log(JSON.stringify(result.trace, null, 2));
 // {
-//   "operator": "AND",
-//   "operands": [
+//   "type": "and",
+//   "conditions": [
 //     {
-//       "field": "age",
-//       "operator": ">=",
-//       "value": 18,
-//       "actual": 25,
+//       "type": "gte",
+//       "left": { "type": "field", "path": "age", "actual": 25 },
+//       "right": { "type": "number", "value": 18 },
 //       "passed": true
 //     },
 //     {
-//       "field": "status",
-//       "operator": "==",
-//       "value": "active",
-//       "actual": "inactive",
+//       "type": "eq",
+//       "left": { "type": "field", "path": "status", "actual": "inactive" },
+//       "right": { "type": "string", "value": "active" },
 //       "passed": false
 //     }
 //   ],
@@ -387,15 +437,7 @@ Executes a rule against input data.
 ```ts
 {
   passed: boolean,
-  trace: {
-    operator?: string,
-    operands?: Trace[],
-    field?: string,
-    operator?: string,
-    value?: any,
-    actual?: any,
-    passed: boolean
-  }
+  trace: RuleTrace
 }
 ```
 
@@ -413,7 +455,7 @@ console.log(result.trace);    // Full decision tree
 Generates human-readable explanations of why conditions failed.
 
 **Parameters:**
-- `trace`: Trace object (from `evaluate()`)
+- `trace`: RuleTrace object (from `evaluate()`)
 
 **Returns:**
 - `string[]` - Array of failure messages
@@ -422,8 +464,6 @@ Generates human-readable explanations of why conditions failed.
 ```ts
 const reasons = explainFailures(result.trace);
 reasons.forEach(reason => console.log("• " + reason));
-// • age >= 18: expected >= 18, got 16
-// • status == active: expected active, got inactive
 ```
 
 ---
@@ -433,7 +473,7 @@ reasons.forEach(reason => console.log("• " + reason));
 Lower-level API for custom trace analysis.
 
 **Parameters:**
-- `trace`: Trace object
+- `trace`: RuleTrace object
 - `includePass`: boolean (default: false) - include passing conditions in output
 
 **Returns:**
@@ -441,63 +481,71 @@ Lower-level API for custom trace analysis.
 
 ---
 
-## Rule Structure
+## Rule Syntax
 
-A complete rule definition:
+All rules are JSON objects describing comparisons or boolean logic.
 
-```ts
-interface Rule {
-  operator?: "AND" | "OR" | "NOT";
-  operands?: Rule[];  // For AND/OR/NOT
-  
-  field?: string;     // For comparisons
-  operator?: "==" | "!=" | "<" | "<=" | ">" | ">=" | 
-             "in" | "notIn" | "contains" | "startsWith" | 
-             "endsWith" | "isEmpty" | "isNotEmpty";
-  value?: any;        // For comparisons
+### Comparison Rules
+
+Compare a left-side value against a right-side value:
+
+```json
+{
+  "type": "gte",
+  "left": { "type": "field", "path": "age" },
+  "right": { "type": "number", "value": 18 }
 }
 ```
 
-**Basic Condition:**
-```json
-{
-  "field": "age",
-  "operator": ">=",
-  "value": 18
-}
-```
+Valid comparison types: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `notIn`, `contains`, `notContains`, `startsWith`, `endsWith`, `matches`, `notMatches`, `isNull`, `isNotNull`
 
-**Composite Rule (AND):**
+### AND Rule
+
+All conditions must pass:
+
 ```json
 {
-  "operator": "AND",
-  "operands": [
-    { "field": "age", "operator": ">=", "value": 18 },
-    { "field": "status", "operator": "==", "value": "active" }
+  "type": "and",
+  "conditions": [
+    { "type": "eq", "left": {...}, "right": {...} },
+    { "type": "gte", "left": {...}, "right": {...} }
   ]
 }
 ```
 
-**Composite Rule (OR):**
+### OR Rule
+
+At least one condition must pass:
+
 ```json
 {
-  "operator": "OR",
-  "operands": [
-    { "field": "credit_score", "operator": ">=", "value": 700 },
-    { "field": "annual_income", "operator": ">=", "value": 100000 }
+  "type": "or",
+  "conditions": [
+    { "type": "eq", "left": {...}, "right": {...} },
+    { "type": "eq", "left": {...}, "right": {...} }
   ]
 }
 ```
 
-**Negation:**
+### NOT Rule
+
+Inverts a condition:
+
 ```json
 {
-  "operator": "NOT",
-  "operands": [
-    { "field": "is_fraud", "operator": "==", "value": true }
-  ]
+  "type": "not",
+  "condition": { "type": "eq", "left": {...}, "right": {...} }
 }
 ```
+
+### Values
+
+- Field: `{ "type": "field", "path": "user.age" }`
+- String: `{ "type": "string", "value": "active" }`
+- Number: `{ "type": "number", "value": 42 }`
+- Boolean: `{ "type": "boolean", "value": true }`
+- Null: `{ "type": "null" }`
+- Array: `{ "type": "array", "values": [{ "type": "string", "value": "a" }, ...] }`
 
 ---
 
@@ -507,18 +555,38 @@ interface Rule {
 
 ```ts
 const loanRule = {
-  operator: "AND",
-  operands: [
-    { field: "age", operator: ">=", value: 18 },
-    { field: "employment_status", operator: "==", value: "employed" },
+  type: "and",
+  conditions: [
     {
-      operator: "OR",
-      operands: [
-        { field: "credit_score", operator: ">=", value: 650 },
-        { field: "annual_income", operator: ">=", value: 75000 }
+      type: "gte",
+      left: { type: "field", path: "age" },
+      right: { type: "number", value: 18 }
+    },
+    {
+      type: "eq",
+      left: { type: "field", path: "employment_status" },
+      right: { type: "string", value: "employed" }
+    },
+    {
+      type: "or",
+      conditions: [
+        {
+          type: "gte",
+          left: { type: "field", path: "credit_score" },
+          right: { type: "number", value: 650 }
+        },
+        {
+          type: "gte",
+          left: { type: "field", path: "annual_income" },
+          right: { type: "number", value: 75000 }
+        }
       ]
     },
-    { field: "bankruptcy_history", operator: "==", value: false }
+    {
+      type: "eq",
+      left: { type: "field", path: "bankruptcy_history" },
+      right: { type: "boolean", value: false }
+    }
   ]
 };
 
@@ -538,17 +606,30 @@ console.log(result.passed ? "✅ Approved" : "❌ Denied");
 
 ```ts
 const geoRule = {
-  operator: "AND",
-  operands: [
+  type: "and",
+  conditions: [
     {
-      field: "country",
-      operator: "in",
-      value: ["US", "CA", "MX"]
+      type: "in",
+      left: { type: "field", path: "country" },
+      right: {
+        type: "array",
+        values: [
+          { type: "string", value: "US" },
+          { type: "string", value: "CA" },
+          { type: "string", value: "MX" }
+        ]
+      }
     },
     {
-      field: "state",
-      operator: "notIn",
-      value: ["AK", "HI"] // Exclude Alaska, Hawaii
+      type: "notIn",
+      left: { type: "field", path: "state" },
+      right: {
+        type: "array",
+        values: [
+          { type: "string", value: "AK" },
+          { type: "string", value: "HI" }
+        ]
+      }
     }
   ]
 };
@@ -561,45 +642,26 @@ const result = evaluate(geoRule, user);
 
 ```ts
 const featureFlagRule = {
-  operator: "OR",
-  operands: [
+  type: "or",
+  conditions: [
     {
-      // Early access for beta testers
-      field: "user_group",
-      operator: "==",
-      value: "beta_tester"
+      type: "eq",
+      left: { type: "field", path: "user_group" },
+      right: { type: "string", value: "beta_tester" }
     },
     {
-      // Or for power users with high engagement
-      operator: "AND",
-      operands: [
-        { field: "account_age_days", operator: ">", value: 90 },
-        { field: "monthly_active_sessions", operator: ">", value: 10 }
-      ]
-    },
-    {
-      // Or rollout to 10% of active users
-      field: "rollout_percentage",
-      operator: ">",
-      value: 90 // User ID hash > 90%
-    }
-  ]
-};
-```
-
-### Content Moderation
-
-```ts
-const contentRule = {
-  operator: "AND",
-  operands: [
-    { field: "is_spam", operator: "==", value: false },
-    { field: "contains_profanity", operator: "==", value: false },
-    {
-      operator: "OR",
-      operands: [
-        { field: "author_reputation", operator: ">", value: 50 },
-        { field: "post_word_count", operator: ">", value: 20 }
+      type: "and",
+      conditions: [
+        {
+          type: "gte",
+          left: { type: "field", path: "account_age_days" },
+          right: { type: "number", value: 90 }
+        },
+        {
+          type: "gte",
+          left: { type: "field", path: "monthly_active_sessions" },
+          right: { type: "number", value: 10 }
+        }
       ]
     }
   ]
@@ -615,7 +677,11 @@ const contentRule = {
 ```ts
 import { safeValidateRule, evaluate } from "@qarar/sdk";
 
-const rule = { field: "age", operator: ">=", value: 18 };
+const rule = {
+  type: "gte",
+  left: { type: "field", path: "age" },
+  right: { type: "number", value: 18 }
+};
 const result = evaluate(rule, { age: 25 });
 console.log(result.passed);
 ```
@@ -625,7 +691,11 @@ console.log(result.passed);
 ```ts
 import { safeValidateRule, evaluate } from "@qarar/sdk";
 
-const rule = { field: "age", operator: ">=", value: 18 };
+const rule = {
+  type: "gte",
+  left: { type: "field", path: "age" },
+  right: { type: "number", value: 18 }
+};
 const result = evaluate(rule, { age: 25 });
 console.log(result.passed);
 ```
@@ -637,7 +707,11 @@ console.log(result.passed);
 <script>
   const { safeValidateRule, evaluate } = window.Qarar;
   
-  const rule = { field: "age", operator: ">=", value: 18 };
+  const rule = {
+    type: "gte",
+    left: { type: "field", path: "age" },
+    right: { type: "number", value: 18 }
+  };
   const result = evaluate(rule, { age: 25 });
   console.log(result.passed);
 </script>
@@ -661,14 +735,14 @@ For production benchmarks and performance tuning, test with your actual rule com
 
 ## Troubleshooting
 
-### Validation Error: "Unknown operator"
+### Validation Error: "Unknown type"
 
 **Problem:**
 ```
-ZodError: field operator: invalid literal value 'betweeen'
+ZodError: Invalid discriminator value. Expected ...
 ```
 
-**Solution:** Check for typos. Valid operators: `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `notIn`, `contains`, `startsWith`, `endsWith`, `isEmpty`, `isNotEmpty`.
+**Solution:** Check the `type` field. Valid types: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `notIn`, `contains`, `startsWith`, `endsWith`, `matches`, `between`, `and`, `or`, `not`.
 
 ### Rule Evaluation Returns Unexpected Result
 
@@ -679,19 +753,23 @@ ZodError: field operator: invalid literal value 'betweeen'
 console.log(JSON.stringify(result.trace, null, 2));
 ```
 
-Check the `actual` value against your `expected` value. This usually reveals data type mismatches (e.g., `"25"` vs `25`).
+Check the `actual` value from the trace against your `right` value. This usually reveals data type mismatches (e.g., `"25"` vs `25`).
 
 ### Missing Field in Data
 
-**Problem:** A rule references `user.role` but input data doesn't have a `role` field.
+**Problem:** A rule references `user.age` but input data doesn't have an `age` field.
 
-**Solution:** Qarar treats missing fields as `undefined` and they fail comparisons (except `isEmpty` which passes). Always validate that input data has all required fields:
+**Solution:** Qarar treats missing fields as `null`. Use `isNull` or `isNotNull` operators to check for missing fields:
 
 ```ts
-const rule = { field: "role", operator: "==", value: "admin" };
-const data = {}; // Missing 'role'
+const rule = {
+  type: "isNotNull",
+  left: { type: "field", path: "email" }
+};
+
+const data = {}; // Missing 'email'
 const result = evaluate(rule, data);
-console.log(result.passed); // false (undefined != "admin")
+console.log(result.passed); // false (missing field is treated as null)
 ```
 
 ---

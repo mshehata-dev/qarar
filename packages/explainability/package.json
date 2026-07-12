@@ -1,6 +1,6 @@
 {
   "name": "@qarar/explainability",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Qarar trace → human-readable explanation",
   "type": "module",
   "main": "./dist/index.js",

@@ -1,6 +1,6 @@
 {
   "name": "@qarar/spec",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Qarar specification — AST types and Zod schemas",
   "type": "module",
   "main": "./dist/index.js",

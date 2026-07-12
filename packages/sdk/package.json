@@ -1,6 +1,6 @@
 {
   "name": "@qarar/sdk",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Single-package Qarar SDK (spec + engine + explainability)",
   "keywords": [
     "rules-engine",

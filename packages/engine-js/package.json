@@ -1,6 +1,6 @@
 {
   "name": "@qarar/engine-js",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Qarar JavaScript/TypeScript engine — evaluate rules with full trace",
   "type": "module",
   "main": "./dist/index.js",

@@ -1,7 +1,7 @@
 {
   "name": "@qarar/compiler-sql",
   "private": true,
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Qarar → SQL WHERE clause compiler",
   "type": "module",
   "main": "./dist/index.js",

@@ -195,3 +195,6 @@ export function evaluate(
   const trace = evaluateNode(rule.root, data);
   return { result: trace.passed, trace };
 }
+
+export { evaluateDecisionTable, type DecisionTableResult, type BranchEvaluation } from "./decisionTable.js";
+

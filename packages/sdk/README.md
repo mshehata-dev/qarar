@@ -68,6 +68,36 @@ if (!evaluated.result) {
 
 ---
 
+## Fluent Rule Builder (Recommended)
+
+Instead of manually writing raw AST JSON, construct rules programmatically using the fluent builder API:
+
+```ts
+import { rule, where, or, evaluate } from "@qarar/sdk";
+
+const eligibilityRule = rule("Customer Eligibility")
+  .id("eligibility-rule-1")
+  .description("Check customer age, plan, and country")
+  .where("customer.age").gte(18)
+  .and("customer.plan").in(["premium", "enterprise"])
+  .and(
+    or(
+      where("customer.country").eq("EG"),
+      where("customer.country").eq("US")
+    )
+  )
+  .build();
+
+const result = evaluate(eligibilityRule, {
+  customer: { age: 25, plan: "premium", country: "EG" }
+});
+
+console.log(result.result); // true
+```
+
+---
+
+
 ## Mental Model
 
 - A rule is a top-level object: metadata + `root`.

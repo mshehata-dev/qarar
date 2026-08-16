@@ -1,0 +1,44 @@
+---
+title: "Qarar - Dynamic Business Rules Standard"
+description: "Update business logic live as JSON without touching code or redeploying servers."
+template: splash
+hero:
+  tagline: "Change business rules dynamically in JSON without modifying code or redeploying applications."
+  actions:
+    - text: "Quickstart: Zero-Deploy Rules"
+      link: /getting-started/quickstart/
+      icon: right-arrow
+      variant: primary
+    - text: "Try Live JSON Studio"
+      link: /playground/
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+import InteractivePlayground from '../../components/InteractivePlayground';
+
+> [!IMPORTANT]
+> **Why Qarar?** Hardcoding `if/else` logic forces code commits, code reviews, and server redeployments for every policy change. Qarar turns rules into dynamic JSON definitions stored in your database or CMS, so business logic updates happen live in seconds.
+
+<CardGrid stack>
+  <Card title="⚡ Zero Code Redeploys" icon="rocket">
+    Store rules as JSON in Postgres, MongoDB, or Redis. Change business policies in real time without rebuilding or redeploying your codebase.
+  </Card>
+  <Card title="🎨 Non-Developer Rule Management" icon="laptop">
+    Non-engineers (Product, Risk, Support, Operations) can visually author, audit, and update JSON rules using `@qarar/react-builder`.
+  </Card>
+  <Card title="🔍 Instant Human Explainability" icon="information">
+    Never debug logs to figure out why a rule failed. Get human-readable explanations (`explainFailures`) for support tickets and audit trails.
+  </Card>
+  <Card title="🗄️ Database Query Pushdown" icon="setting">
+    Compile JSON rules into high-performance SQL `WHERE` clauses and MongoDB filter objects before querying your database.
+  </Card>
+</CardGrid>
+
+---
+
+## Interactive Rule Studio
+
+<div className="playground-container">
+  <InteractivePlayground client:only="react" />
+</div>

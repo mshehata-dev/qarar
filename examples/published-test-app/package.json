@@ -7,6 +7,7 @@
     "start": "node index.mjs"
   },
   "dependencies": {
-    "@qarar/sdk": "^0.0.2"
+    "@qarar/sdk": "workspace:*",
+    "zod": "^3.24.1"
   }
 }

@@ -142,7 +142,7 @@ export type BetweenNode = z.infer<typeof BetweenNodeSchema>;
 export type ComparisonOp = z.infer<typeof ComparisonOperator>;
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Rule Helpers
 // ---------------------------------------------------------------------------
 
 export function validateRule(input: unknown): Rule {
@@ -151,4 +151,52 @@ export function validateRule(input: unknown): Rule {
 
 export function safeValidateRule(input: unknown) {
   return RuleSchema.safeParse(input);
+}
+
+// ---------------------------------------------------------------------------
+// Decision Table / Dynamic Switch Case
+// ---------------------------------------------------------------------------
+
+export const DecisionBranchSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().optional(),
+  description: z.string().optional(),
+  condition: RuleNodeSchema,
+  output: z.unknown(),
+});
+
+export const DecisionTableSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  version: z.string().default("1"),
+  mode: z.enum(["first", "all"]).default("first"),
+  defaultOutput: z.unknown(),
+  branches: z.array(DecisionBranchSchema),
+});
+
+export type DecisionBranch<T = unknown> = {
+  id: string;
+  name?: string;
+  description?: string;
+  condition: RuleNode;
+  output: T;
+};
+
+export type DecisionTable<T = unknown> = {
+  id: string;
+  name: string;
+  description?: string;
+  version: string;
+  mode?: "first" | "all";
+  defaultOutput: T;
+  branches: DecisionBranch<T>[];
+};
+
+export function validateDecisionTable<T = unknown>(input: unknown): DecisionTable<T> {
+  return DecisionTableSchema.parse(input) as DecisionTable<T>;
+}
+
+export function safeValidateDecisionTable<T = unknown>(input: unknown) {
+  return DecisionTableSchema.safeParse(input);
 }

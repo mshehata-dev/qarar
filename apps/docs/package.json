@@ -1,0 +1,33 @@
+{
+  "name": "@qarar/docs",
+  "version": "0.0.4",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro check && astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.4",
+    "@astrojs/react": "^4.2.1",
+    "@astrojs/starlight": "^0.32.1",
+    "@qarar/compiler-mongo": "workspace:*",
+    "@qarar/compiler-sql": "workspace:*",
+    "@qarar/engine-js": "workspace:*",
+    "@qarar/react-builder": "workspace:*",
+    "@qarar/sdk": "workspace:*",
+    "@qarar/spec": "workspace:*",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "astro": "^5.4.2",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.18.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.7.2",
+    "zod": "^3.24.1"
+  }
+}

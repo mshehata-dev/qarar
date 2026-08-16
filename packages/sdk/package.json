@@ -32,6 +32,18 @@
     "./explainability": {
       "import": "./dist/explainability.js",
       "types": "./dist/explainability.d.ts"
+    },
+    "./builder": {
+      "import": "./dist/builder.js",
+      "types": "./dist/builder.d.ts"
+    },
+    "./sql": {
+      "import": "./dist/sql.js",
+      "types": "./dist/sql.d.ts"
+    },
+    "./mongo": {
+      "import": "./dist/mongo.js",
+      "types": "./dist/mongo.d.ts"
     }
   },
   "scripts": {
@@ -45,6 +57,8 @@
     "access": "public"
   },
   "dependencies": {
+    "@qarar/compiler-mongo": "workspace:*",
+    "@qarar/compiler-sql": "workspace:*",
     "zod": "^3.24.1"
   },
   "devDependencies": {

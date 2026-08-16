@@ -170,3 +170,131 @@ export function evaluate(
   const trace = evaluateNode(rule.root, data);
   return { result: trace.passed, trace };
 }
+
+import { safeValidateRule, validateRule, Rule, safeValidateDecisionTable, DecisionTable, DecisionBranch } from "./spec.js";
+import { explainFailures, ExplainOptions } from "./explainability.js";
+
+export interface CheckRuleResult {
+  ok: boolean;
+  result: boolean;
+  reasons: string[];
+  trace: TraceEntry;
+  rule?: Rule;
+  validationError?: unknown;
+}
+
+export function checkRule(
+  ruleInput: unknown,
+  data: Record<string, unknown>,
+  options?: ExplainOptions
+): CheckRuleResult {
+  const safe = safeValidateRule(ruleInput);
+  if (!safe.success) {
+    return {
+      ok: false,
+      result: false,
+      reasons: safe.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`),
+      trace: { type: "logical", operator: "and", passed: false, children: [] },
+      validationError: safe.error,
+    };
+  }
+
+  const evaluated = evaluate(safe.data, data);
+  const failures = explainFailures(evaluated.trace, options);
+
+  return {
+    ok: true,
+    result: evaluated.result,
+    reasons: failures,
+    trace: evaluated.trace,
+    rule: safe.data,
+  };
+}
+
+export function compileRule(
+  ruleInput: unknown
+): (data: Record<string, unknown>) => EvaluationResult {
+  const parsedRule = validateRule(ruleInput);
+  return (data: Record<string, unknown>) => evaluate(parsedRule, data);
+}
+
+export interface BranchEvaluation<T = unknown> {
+  branch: DecisionBranch<T>;
+  matched: boolean;
+  trace: TraceEntry;
+}
+
+export interface DecisionTableResult<T = unknown> {
+  matched: boolean;
+  matchedBranch: DecisionBranch<T> | null;
+  output: T;
+  allMatchedBranches: DecisionBranch<T>[];
+  branchEvaluations: BranchEvaluation<T>[];
+}
+
+export function evaluateDecisionTable<T = unknown>(
+  table: DecisionTable<T>,
+  data: Record<string, unknown>
+): DecisionTableResult<T> {
+  const mode = table.mode ?? "first";
+  const branchEvaluations: BranchEvaluation<T>[] = [];
+  const allMatchedBranches: DecisionBranch<T>[] = [];
+  let firstMatchedBranch: DecisionBranch<T> | null = null;
+
+  for (const branch of table.branches) {
+    const { result, trace } = evaluate({ root: branch.condition }, data);
+    const evalResult: BranchEvaluation<T> = { branch, matched: result, trace };
+    branchEvaluations.push(evalResult);
+
+    if (result) {
+      allMatchedBranches.push(branch);
+      if (!firstMatchedBranch) {
+        firstMatchedBranch = branch;
+      }
+      if (mode === "first") {
+        break;
+      }
+    }
+  }
+
+  const matched = allMatchedBranches.length > 0;
+  const matchedBranch = firstMatchedBranch;
+  const output = matchedBranch ? matchedBranch.output : table.defaultOutput;
+
+  return {
+    matched,
+    matchedBranch,
+    output,
+    allMatchedBranches,
+    branchEvaluations,
+  };
+}
+
+export interface CheckDecisionTableResult<T = unknown> extends DecisionTableResult<T> {
+  ok: boolean;
+  validationError?: unknown;
+}
+
+export function checkDecisionTable<T = unknown>(
+  tableInput: unknown,
+  data: Record<string, unknown>
+): CheckDecisionTableResult<T> {
+  const safe = safeValidateDecisionTable<T>(tableInput);
+  if (!safe.success) {
+    return {
+      ok: false,
+      matched: false,
+      matchedBranch: null,
+      output: (tableInput as { defaultOutput?: T })?.defaultOutput as T,
+      allMatchedBranches: [],
+      branchEvaluations: [],
+      validationError: safe.error,
+    };
+  }
+
+  const evaluated = evaluateDecisionTable<T>(safe.data as DecisionTable<T>, data);
+  return {
+    ok: true,
+    ...evaluated,
+  };
+}

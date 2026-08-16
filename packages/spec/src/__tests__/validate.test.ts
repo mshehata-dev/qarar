@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateRule, safeValidateRule } from "../index.js";
+import { validateRule, safeValidateRule } from "../index.ts";
 
 const VALID_RULE = {
   id: "test",

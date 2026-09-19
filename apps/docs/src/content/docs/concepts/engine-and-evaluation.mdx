@@ -1,0 +1,113 @@
+---
+title: Rule Engine & Evaluation Lifecycle
+description: Deep dive into the Qarar evaluation engine, execution lifecycle, short-circuit optimizations, and execution modes.
+---
+
+import { Card, CardGrid, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Qarar's evaluation engine is designed for ultra-high throughput, deterministic execution, and zero runtime memory allocations for primitive conditions.
+
+---
+
+## 1. Evaluation Lifecycle
+
+Every time a rule is evaluated against a data payload, it follows a strict 4-stage pipeline:
+
+```text
+  1. INPUT PAYLOAD           2. SAFE RESOLUTION          3. SHORT-CIRCUIT EVAL        4. OUTPUT & TRACE
+ ┌─────────────────┐        ┌───────────────────┐       ┌────────────────────┐       ┌─────────────────┐
+ │ { customer:     │ ─────► │ customer.age ➔ 24 │ ────► │ 24 >= 18 ➔ TRUE    │ ────► │ result: true    │
+ │   { age: 24 } } │        │ (guarded path)    │       │ (short-circuits)   │       │ trace: [...]    │
+ └─────────────────┘        └───────────────────┘       └────────────────────┘       └─────────────────┘
+```
+
+1. **Context Ingestion**: Input data is received as an arbitrary JavaScript object or deserialized JSON record.
+2. **Safe Field Resolution**: Dot-notation paths (`"customer.profile.tier"`) are resolved recursively. If any intermediate parent is missing, it resolves to `undefined` without throwing runtime exceptions. Prototype access (`__proto__`) is strictly rejected.
+3. **Condition Execution**: Conditions evaluate according to strict AST operator semantics.
+4. **Short-Circuit Traversal**:
+   - In an `and` gate: The moment any condition resolves `false`, evaluation halts immediately. Remaining branches are skipped.
+   - In an `or` gate: The moment any condition resolves `true`, evaluation halts immediately. Remaining branches are skipped.
+5. **Trace Recording**: Condition states, evaluated paths, expected thresholds, and actual values are recorded for explainability.
+
+---
+
+## 2. The Three Execution Modes
+
+Qarar provides three distinct execution functions optimized for different operational needs:
+
+| Method | Throughput | Return Type | Best For |
+| :--- | :--- | :--- | :--- |
+| **`compileRule(rule)`** | **~3,524,570 ops/s** | `(data) => boolean` | High-throughput APIs, Kafka consumers, microservices, batch loops |
+| **`evaluate(rule, data)`** | **~2,537,626 ops/s** | `{ result, trace }` | Telemetry pipelines, audit logs, debug modes |
+| **`checkRule(rule, data)`** | **~22,478 ops/s** | `{ result, valid, reasons, trace }` | User-facing forms, customer support tools, admin panels |
+
+---
+
+## 3. Pre-Compiled Closures (`compileRule`)
+
+When running in production services, evaluating the exact same rule AST thousands of times per second with standard tree traversal involves repetitive object property checks.
+
+`compileRule` compiles the AST structure into an optimized, pure JavaScript closure once during server initialization:
+
+```ts
+import { compileRule, rule } from "@qarar/sdk";
+
+const fraudShield = rule("Fraud Check")
+  .where("risk.score").gte(700)
+  .and("transaction.amount").gte(5000)
+  .build();
+
+// ✅ Compile once during service boot
+const isFraudulent = compileRule(fraudShield);
+
+// 🚀 Evaluates in ~280 nanoseconds with ZERO runtime AST traversal overhead
+app.post("/transaction", (req, res) => {
+  const flagged = isFraudulent(req.body);
+  if (flagged) {
+    return res.status(403).json({ error: "Transaction flagged by risk engine" });
+  }
+  res.json({ status: "approved" });
+});
+```
+
+---
+
+## 4. Deep Inspection (`evaluate`)
+
+If your service needs to record structured audit logs for compliance without generating human string sentences:
+
+```ts
+import { evaluate } from "@qarar/sdk";
+
+const { result, trace } = evaluate(fraudShield, incomingTransaction);
+
+console.log("Evaluation Outcome:", result);
+console.log("Recorded Trace Tree:", trace);
+```
+
+---
+
+## 5. All-in-One Validator (`checkRule`)
+
+When processing user submissions or requests where you need to report human-friendly errors back to a client:
+
+```ts
+import { checkRule } from "@qarar/sdk";
+
+const check = checkRule(fraudShield, incomingTransaction);
+
+if (!check.result) {
+  console.log("Reasons for failure:", check.reasons);
+  // ➔ ["risk.score: 640 is not >= 700"]
+}
+```
+
+---
+
+## 6. Error & Null Safety
+
+Qarar ensures production resilience by gracefully handling unexpected data shapes:
+
+- **Missing Fields**: If a rule checks `"user.billing.card.expYear"` but the input object is `{ user: {} }`, Qarar does not throw an uncaught error. The condition safely evaluates against `undefined`.
+- **Type Mismatches**: Comparing a `string` against a `number` using `gte` safely returns `false` without crashing the process.
+- **Null Safety**: Dedicated `isNull` and `isNotNull` operators explicitly distinguish between `null`, `undefined`, and valid falsy values (`0`, `false`, `""`).

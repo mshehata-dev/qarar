@@ -1,0 +1,92 @@
+---
+title: Introduction & Architecture
+description: Learn why Qarar was created, how it compares to legacy rule engines and eval scripts, and its core architecture.
+---
+
+import { Card, CardGrid, Badge } from '@astrojs/starlight/components';
+
+Every software company eventually faces the **Business Logic Bottleneck**: marketing wants to adjust discount thresholds, risk teams want to tweak fraud triggers, and operations needs to update shipping eligibility rules.
+
+When this logic is hardcoded in application code, every small adjustment requires a developer commit, a code review, an automated test run, and a production deployment.
+
+**Qarar** solves this by decoupling business rules from code deployment. Rules are represented as technology-agnostic **Abstract Syntax Trees (ASTs)** stored as standard JSON in any database.
+
+---
+
+## The Rule Evaluation Spectrum
+
+To understand why Qarar was engineered as a JSON AST, consider the existing alternatives:
+
+| Approach | Agility | Security | Speed | Pushdown to DB | Explainability |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Hardcoded `if/else`** | ❌ Slow (Requires Deploy) | ✅ High | ✅ Fast (V8) | ❌ Manual SQL/Mongo duplicate | ❌ Manual log statements |
+| **Dynamic `eval()` / `vm2`** | ✅ Fast (No Deploy) | ❌ Critical Risk (RCE, Escapes) | ⚠️ Moderate | ❌ Impossible | ❌ Hard |
+| **Legacy Engines (Drools)** | ⚠️ Complex (DRL syntax) | ⚠️ JVM Overhead | ⚠️ Slow (High memory) | ❌ In-memory only | ⚠️ Complex rule dumps |
+| **Qarar JSON AST** | ✅ Instant (Zero Deploy) | ✅ **100% Sandboxed** | ⚡ **3.5M+ ops/s** | ✅ **Native SQL & Mongo** | ✅ **Built-in plain English** |
+
+---
+
+## 🔒 Security & Sandboxing Guarantees
+
+Running user-defined or non-developer-authored logic in production carries significant security risks when using traditional scripting languages or dynamic interpreters.
+
+Qarar provides strict security guarantees by design:
+
+- **Zero `eval()` or Function Constructors**: Qarar evaluates rules via strict recursive tree traversal and pre-compiled typed closures. Code execution vulnerabilities (RCE) are impossible.
+- **Zero Prototype Pollution**: Field paths (e.g. `"customer.profile.tier"`) are safely resolved using guarded object key lookups. Malicious keys like `__proto__`, `constructor`, or `prototype` cannot hijack your Node.js runtime.
+- **Deterministic & Guaranteed Termination**: Rules cannot express infinite loops, recursive function calls, or uncontrolled memory allocations. Every evaluation finishes in finite, deterministic time.
+- **Safe for Multi-Tenant SaaS**: Customers or internal business users can author custom rules in your SaaS application without endangering host infrastructure.
+
+---
+
+## 🏗️ High-Level System Architecture
+
+Qarar is split into modular, single-responsibility packages within an open monorepo:
+
+```text
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    AUTHORING LAYER                                     │
+│                                                                                        │
+│   Fluent TS Builder: rule("VIP").where("age").gte(18)...                               │
+│   Visual Admin UI:   <RuleBuilder /> (React Component)                                │
+└───────────────────────────────────────────┬────────────────────────────────────────────┘
+                                            │ produces portable JSON AST
+                                            ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                              STORAGE LAYER (Zero-Deploy)                               │
+│                                                                                        │
+│   PostgreSQL (JSONB)  •  MongoDB (Doc)  •  Redis (Cache)  •  S3 / Headless CMS         │
+└─────────────────────┬────────────────────────────────────────────────────┬─────────────┘
+                      │                                                    │
+       in-memory eval │                                                    │ compile down
+                      ▼                                                    ▼
+┌───────────────────────────────────────────┐      ┌─────────────────────────────────────┐
+│              EXECUTION LAYER              │      │       QUERY PUSHDOWN COMPILERS      │
+│                                           │      │                                     │
+│  evaluate(rule, data)     ~2.5M ops/s     │      │  compileToSQL(rule)    640k ops/s   │
+│  compileRule(rule)(data)  ~3.5M ops/s     │      │  compileToMongo(rule)  1.3M ops/s   │
+│  checkRule(rule, data)    ~22.5k ops/s    │      └─────────────────────────────────────┘
+└─────────────────────┬─────────────────────┘
+                      │
+                      ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                             EXPLAINABILITY & AUDIT TRAILS                              │
+│                                                                                        │
+│  check.reasons ➔ ['customer.age: 16 is not >= 18'] (Human-readable for UI & audit)     │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Next Steps
+
+<CardGrid>
+  <Card title="Quickstart (5 Minutes)" icon="rocket">
+    Learn how to build, evaluate, and explain your first rule in under 5 minutes.
+    [Get Started →](/getting-started/quickstart/)
+  </Card>
+  <Card title="Interactive Studio" icon="laptop">
+    Test live rule evaluation and view generated SQL/Mongo queries in your browser.
+    [Try Studio →](/playground/)
+  </Card>
+</CardGrid>

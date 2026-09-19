@@ -1,0 +1,78 @@
+---
+title: Next.js App Router & Server Actions
+description: Enforce dynamic business rules in Next.js Server Actions, Route Handlers, and Edge Middleware.
+---
+
+import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+Qarar contains zero platform-specific C++ dependencies, making it 100% compatible with the Next.js App Router, Server Actions, and Edge Runtime isolates (V8 / Cloudflare Workers).
+
+---
+
+## 1. Route Handler Guard (`app/api/.../route.ts`)
+
+```ts
+import { NextResponse } from "next/server";
+import { checkRule, rule } from "@qarar/sdk";
+
+// Define rule or fetch from DB/Redis
+const withdrawalLimitRule = rule("Daily Withdrawal Limit")
+  .where("user.kycVerified").eq(true)
+  .and("transaction.amount").lte(10000)
+  .build();
+
+export async function POST(request: Request) {
+  const body = await request.json();
+
+  // Evaluate dynamic rule
+  const check = checkRule(withdrawalLimitRule, body);
+
+  if (!check.result) {
+    return NextResponse.json(
+      {
+        error: "Withdrawal rejected",
+        reasons: check.reasons,
+      },
+      { status: 403 }
+    );
+  }
+
+  // Proceed with withdrawal processing...
+  return NextResponse.json({ status: "processed" });
+}
+```
+
+---
+
+## 2. Server Action Guard (`"use server"`)
+
+Protect Next.js Server Actions directly in your React components:
+
+```ts
+"use server";
+
+import { checkRule, rule } from "@qarar/sdk";
+import { auth } from "@/lib/auth";
+
+const discountRule = rule("Team Discount")
+  .where("org.memberCount").gte(10)
+  .build();
+
+export async function applyTeamDiscountAction(orgId: string) {
+  const session = await auth();
+  if (!session) throw new Error("Unauthorized");
+
+  const org = await db.org.findUnique({ where: { id: orgId } });
+  const check = checkRule(discountRule, { org });
+
+  if (!check.result) {
+    return {
+      success: false,
+      reasons: check.reasons,
+    };
+  }
+
+  await db.org.update({ where: { id: orgId }, data: { hasDiscount: true } });
+  return { success: true };
+}
+```

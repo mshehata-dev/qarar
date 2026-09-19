@@ -1,0 +1,116 @@
+---
+title: "Decision Tables & Dynamic Switch Cases"
+description: "Replace hardcoded if/else statements and switch blocks with dynamic, JSON-configurable decision matrices."
+---
+
+import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+Real-world applications frequently need to compute dynamic values based on conditions — such as dynamic shipping rates, loyalty discount tiers, lead routing, or fraud risk actions.
+
+Hardcoding these as `switch` or `if/else if` statements in application code means any adjustment requires a developer commit and a redeployment. **Decision Tables (`switchRule`)** let you define the entire routing matrix as portable JSON data.
+
+```text
+                           Input Record: { tier: "vip", spend: 250 }
+                                             │
+                                             ▼
+                               ┌───────────────────────────┐
+                               │       DecisionTable       │
+                               │  (Dynamic Switch Matrix)  │
+                               └─────────────┬─────────────┘
+                                             │
+               ┌─────────────────────────────┼─────────────────────────────┐
+               ▼                             ▼                             ▼
+       Branch 1: VIP Tier            Branch 2: Gold Tier             Default Tier
+       🟢 MATCHED                    ⚪ Skipped                     ⚪ Skipped
+       ➔ Output:                     ➔ Output:                      ➔ Output:
+         { discount: 25,               { discount: 15,                { discount: 0,
+           freeShipping: true }          freeShipping: true }           freeShipping: false }
+```
+
+---
+
+## 1. Creating a Decision Table
+
+Use `switchRule` to define branches with conditions and their corresponding typed outputs:
+
+```ts
+import { switchRule, evaluateDecisionTable } from "@qarar/sdk";
+
+// Define table with a default fallback output
+const pricingTable = switchRule<{ discount: number; freeShipping: boolean }>("Discount Matrix")
+  .id("pricing_matrix_v1")
+  .default({ discount: 0, freeShipping: false })
+  .case("vip-tier", { discount: 25, freeShipping: true }, (c) =>
+    c.where("customer.tier").eq("vip").and("cart.total").gte(200)
+  )
+  .case("gold-tier", { discount: 15, freeShipping: true }, (c) =>
+    c.where("customer.tier").eq("gold").and("cart.total").gte(100)
+  )
+  .case("silver-tier", { discount: 5, freeShipping: false }, (c) =>
+    c.where("customer.tier").eq("silver")
+  )
+  .build();
+```
+
+Behind the scenes, `.build()` produces a validated `DecisionTable` AST that can be persisted in any database.
+
+---
+
+## 2. Evaluating a Decision Table
+
+Pass the table and an input data object to `evaluateDecisionTable`:
+
+```ts
+const cart = {
+  customer: { tier: "vip" },
+  cart: { total: 250 }
+};
+
+const decision = evaluateDecisionTable(pricingTable, cart);
+
+console.log("Matched:", decision.matched);     // true
+console.log("Branch ID:", decision.branchId);   // "vip-tier"
+console.log("Output:", decision.output);        // { discount: 25, freeShipping: true }
+```
+
+If no branches match, `decision.matched` is `false` and `decision.output` returns your configured fallback `defaultOutput`.
+
+---
+
+## 3. Hit Strategies: `first` vs `all`
+
+Decision tables support two distinct hit policies:
+
+### `mode: "first"` (Default)
+Stops evaluating immediately upon finding the first matching branch (early exit). Ideal for tiered pricing, categorization, lead routing, and status assignment.
+
+```ts
+const table = switchRule("Tiers").mode("first")...build();
+```
+
+### `mode: "all"`
+Evaluates every branch in the table and returns an array of all matching outputs. Ideal for stacking discounts, collecting multiple security flags, or tagging records with multiple tags.
+
+```ts
+const tagger = switchRule<string>("Feature Flags")
+  .mode("all")
+  .case("beta-ui", "ENABLE_NEW_UI", (c) => c.where("user.isBeta").eq(true))
+  .case("pro-analytics", "ENABLE_ANALYTICS", (c) => c.where("user.plan").eq("pro"))
+  .build();
+
+const result = evaluateDecisionTable(tagger, { user: { isBeta: true, plan: "pro" } });
+console.log(result.outputs); // ["ENABLE_NEW_UI", "ENABLE_ANALYTICS"]
+```
+
+---
+
+## ⚡ Scaling & Performance
+
+Our benchmark suite tested decision tables across 10-branch and 50-branch matrices on Node.js v22:
+
+| Table Size | Mode | Throughput | Median Latency (p50) | Primary Use Case |
+| :--- | :--- | :--- | :--- | :--- |
+| **10 Branches** | `"first"` (Early Exit) | **1,852,864 ops/s** | **0.33 µs** (330 ns) | Tiered pricing, user segmenting |
+| **10 Branches** | `"all"` (Full Evaluation) | **620,622 ops/s** | **1.38 µs** | Multi-tag tagging, stacked perks |
+| **50 Branches** | `"first"` (Early Exit) | **2,153,116 ops/s** | **0.33 µs** (330 ns) | Deep categorization catalogs |
+| **50 Branches** | `"all"` (Full Evaluation) | **125,546 ops/s** | **7.04 µs** | Complex compliance audit checks |

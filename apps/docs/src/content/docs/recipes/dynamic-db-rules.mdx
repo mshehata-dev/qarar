@@ -1,0 +1,154 @@
+---
+title: "Dynamic Zero-Deploy Rules Architecture"
+description: "Store, cache, and execute dynamic JSON rules from PostgreSQL and Redis without restarting servers or deploying code."
+---
+
+import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+This recipe illustrates how to build a production architecture where business rules are stored in a database (PostgreSQL or MongoDB) and cached in Redis. When business policies change, your application picks up the update in milliseconds with **zero code changes and zero server deployments**.
+
+```text
+  Admin Dashboard (React)           PostgreSQL / Redis               Node.js API Server
+ ┌──────────────────────┐        ┌──────────────────────┐        ┌──────────────────────┐
+ │  <RuleBuilder />     ├───────►│ Stores JSON AST      ├───────►│ Pre-compiles Rule    │
+ │  Updates Rule AST    │ (save) │ (Invalidates cache)  │(fetch) │ ~3.5M ops/sec eval   │
+ └──────────────────────┘        └──────────────────────┘        └──────────────────────┘
+```
+
+---
+
+## 1. Database Schema
+
+<Tabs>
+  <TabItem label="PostgreSQL (Raw SQL)">
+    ```sql
+    CREATE TABLE business_rules (
+      id VARCHAR(100) PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      version VARCHAR(50) DEFAULT '1',
+      ast JSONB NOT NULL,
+      is_active BOOLEAN DEFAULT TRUE,
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX idx_business_rules_active ON business_rules(id) WHERE is_active = TRUE;
+    ```
+  </TabItem>
+  <TabItem label="Prisma ORM">
+    ```prisma
+    model BusinessRule {
+      id        String   @id
+      name      String
+      version   String   @default("1")
+      ast       Json     // Stores portable Qarar Rule AST
+      isActive  Boolean  @default(true)
+      updatedAt DateTime @updatedAt
+
+      @@index([id, isActive])
+    }
+    ```
+  </TabItem>
+</Tabs>
+
+---
+
+## 2. Dynamic Rule Service with Redis Caching
+
+This service caches rules in Redis and compiles them in-memory using `compileRule` for sub-microsecond evaluation:
+
+```ts
+import { Rule, compileRule, validateRule } from "@qarar/sdk";
+import Redis from "ioredis";
+import { pgPool } from "./db";
+
+const redis = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
+
+// In-memory compiled closure cache (evaluates at ~3.5M ops/sec)
+const compiledCache = new Map<string, (data: unknown) => boolean>();
+
+export class RuleService {
+  /**
+   * Fetches and compiles a rule, utilizing Redis and in-memory caches.
+   */
+  static async getCompiledRule(ruleId: string): Promise<(data: unknown) => boolean> {
+    // 1. Check in-memory compiled closures
+    if (compiledCache.has(ruleId)) {
+      return compiledCache.get(ruleId)!;
+    }
+
+    // 2. Check Redis cache
+    let ruleJSON: Rule;
+    const cached = await redis.get(`rule:${ruleId}`);
+
+    if (cached) {
+      ruleJSON = JSON.parse(cached);
+    } else {
+      // 3. Fallback to PostgreSQL
+      const query = "SELECT ast FROM business_rules WHERE id = $1 AND is_active = TRUE";
+      const result = await pgPool.query(query, [ruleId]);
+
+      if (result.rows.length === 0) {
+        throw new Error(`Active rule not found: ${ruleId}`);
+      }
+
+      ruleJSON = result.rows[0].ast;
+
+      // Validate untrusted JSON before caching
+      const validation = validateRule(ruleJSON);
+      if (!validation.valid) {
+        throw new Error(`Corrupted rule AST in database: ${validation.errors?.join(", ")}`);
+      }
+
+      // Cache in Redis for 10 minutes
+      await redis.set(`rule:${ruleId}`, JSON.stringify(ruleJSON), "EX", 600);
+    }
+
+    // 4. Compile to closure and store in local memory
+    const compiled = compileRule(ruleJSON);
+    compiledCache.set(ruleId, compiled);
+
+    return compiled;
+  }
+
+  /**
+   * Invalidates caches across all server instances via Redis Pub/Sub.
+   */
+  static async invalidateRule(ruleId: string): Promise<void> {
+    await redis.del(`rule:${ruleId}`);
+    compiledCache.delete(ruleId);
+    await redis.publish("rule_cache_invalidation", ruleId);
+  }
+}
+
+// Listen for distributed invalidation events across multiple API replicas
+const subscriber = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
+subscriber.subscribe("rule_cache_invalidation");
+subscriber.on("message", (_channel, ruleId) => {
+  compiledCache.delete(ruleId);
+});
+```
+
+---
+
+## 3. Using in Request Handlers
+
+Evaluate incoming customer transactions using the dynamic rule:
+
+```ts
+import express from "express";
+import { RuleService } from "./ruleService";
+
+const app = express();
+app.use(express.json());
+
+app.post("/api/checkout", async (req, res) => {
+  try {
+    const isEligible = await RuleService.getCompiledRule("promo_black_friday_2026");
+    const passes = isEligible(req.body);
+
+    res.json({ discountApplied: passes });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+```

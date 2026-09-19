@@ -1,11 +1,222 @@
 /* Custom documentation styling extensions */
-:root {
-  --sl-color-accent-low: #1e293b;
-  --sl-color-accent: #3b82f6;
-  --sl-color-accent-high: #60a5fa;
+@import "@qarar/theme/theme.css";
+
+/* Map Starlight accent variables to canonical @qarar/theme tokens */
+:root,
+:root[data-theme='dark'],
+html[data-theme='dark'] {
+  --sl-color-accent-low: var(--qarar-primary-subtle);
+  --sl-color-accent: var(--qarar-primary);
+  --sl-color-accent-high: var(--qarar-primary-hover);
+  --sl-color-text-accent: var(--qarar-primary);
+  --sl-color-text-invert: #ffffff;
+  --sl-color-bg-accent: var(--qarar-primary);
+
+  /* Studio variables mapped to @qarar/theme */
+  --studio-bg: var(--qarar-bg);
+  --studio-card-bg: var(--qarar-surface);
+  --studio-subcard-bg: var(--qarar-surface-2);
+  --studio-border: var(--qarar-border);
+  --studio-border-hover: var(--qarar-border-hover);
+  --studio-text: var(--qarar-text);
+  --studio-text-muted: var(--qarar-text-muted);
+  --studio-code-bg: var(--qarar-code-bg);
+  --studio-code-border: var(--qarar-code-border);
+  --studio-code-text: var(--qarar-code-text);
+  --studio-input-bg: var(--qarar-input-bg);
+  --studio-input-border: var(--qarar-input-border);
+  --studio-input-text: var(--qarar-input-text);
+  --studio-primary: var(--qarar-primary);
+  --studio-primary-light: var(--qarar-primary-subtle);
+  --studio-accent: var(--qarar-accent);
+  --studio-accent-light: var(--qarar-accent-subtle);
 }
 
+:root[data-theme='light'],
+html[data-theme='light'] {
+  --sl-color-accent-low: var(--qarar-primary-subtle);
+  --sl-color-accent: var(--qarar-primary);
+  --sl-color-accent-high: var(--qarar-primary-hover);
+  --sl-color-text-accent: var(--qarar-primary-hover);
+  --sl-color-text-invert: #ffffff;
+  --sl-color-bg-accent: var(--qarar-primary);
+
+  /* Studio variables mapped to @qarar/theme */
+  --studio-bg: var(--qarar-bg);
+  --studio-card-bg: var(--qarar-surface);
+  --studio-subcard-bg: var(--qarar-surface-2);
+  --studio-border: var(--qarar-border);
+  --studio-border-hover: var(--qarar-border-hover);
+  --studio-text: var(--qarar-text);
+  --studio-text-muted: var(--qarar-text-muted);
+  --studio-code-bg: var(--qarar-code-bg);
+  --studio-code-border: var(--qarar-code-border);
+  --studio-code-text: var(--qarar-code-text);
+  --studio-input-bg: var(--qarar-input-bg);
+  --studio-input-border: var(--qarar-input-border);
+  --studio-input-text: var(--qarar-input-text);
+  --studio-primary: var(--qarar-primary);
+  --studio-primary-light: var(--qarar-primary-subtle);
+  --studio-accent: var(--qarar-accent);
+  --studio-accent-light: var(--qarar-accent-subtle);
+}
+
+/* Explicit brand styling for active navigation & links */
+.sl-markdown-content a:not(:where(.not-content *)) {
+  color: var(--qarar-primary);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  transition: color 0.15s ease;
+}
+
+.sl-markdown-content a:hover:not(:where(.not-content *)) {
+  color: var(--qarar-primary-hover);
+}
+
+/* Active sidebar item */
+[aria-current='page'],
+[aria-current='page']:hover,
+[aria-current='page']:focus {
+  background-color: var(--qarar-primary) !important;
+  color: #ffffff !important;
+  font-weight: 500;
+  border-radius: 6px;
+}
+
+/* Primary buttons */
+.sl-link-button.primary {
+  background-color: var(--qarar-primary) !important;
+  border-color: var(--qarar-primary) !important;
+  color: #ffffff !important;
+  font-weight: 500;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.15s ease;
+}
+
+.sl-link-button.primary:hover {
+  background-color: var(--qarar-primary-hover) !important;
+  border-color: var(--qarar-primary-hover) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* Table of contents active item */
+starlight-toc a[aria-current='true'],
+starlight-toc a:hover {
+  color: var(--qarar-primary) !important;
+}
+
+/* Professional Table Styling */
+.sl-markdown-content table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 1.5rem 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  border: 1px solid var(--qarar-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.sl-markdown-content th {
+  background-color: var(--qarar-surface);
+  color: var(--qarar-text);
+  font-weight: 600;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border-bottom: 2px solid var(--qarar-border);
+}
+
+.sl-markdown-content td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--qarar-border);
+  color: var(--qarar-text);
+  vertical-align: middle;
+}
+
+.sl-markdown-content tr:last-child td {
+  border-bottom: none;
+}
+
+.sl-markdown-content tr:hover td {
+  background-color: var(--qarar-surface-2);
+}
+
+/* Numeric alignment in tables */
+.sl-markdown-content td:has(strong):first-child {
+  font-weight: 600;
+}
+
+/* Sleek Badge enhancements */
+.sl-badge {
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+}
+
+/* Card Grid styling enhancements */
+.card-grid {
+  gap: 1.25rem !important;
+}
+
+.card-grid .card {
+  border: 1px solid var(--qarar-border) !important;
+  border-radius: 8px !important;
+  background-color: var(--qarar-surface) !important;
+  transition: border-color 0.2s ease, transform 0.15s ease;
+}
+
+.card-grid .card:hover {
+  border-color: var(--qarar-border-hover) !important;
+  transform: translateY(-2px);
+}
+
+/* Playground container width */
 .playground-container {
   margin-top: 1rem;
   margin-bottom: 2rem;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Explicitly disable Starlight markdown typography margins inside not-content */
+.not-content button,
+.playground-container button {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.not-content p {
+  margin-top: 0 !important;
+}
+
+.not-content pre,
+.not-content code {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* Narrow the right "On this page" (Table of Contents) sidebar */
+@media (min-width: 72rem) {
+  :root {
+    --sl-content-width: 76rem;
+  }
+
+  .right-sidebar-container {
+    width: 18rem !important;
+    max-width: 18rem !important;
+    min-width: 18rem !important;
+  }
+
+  .right-sidebar {
+    width: 18rem !important;
+  }
+
+  [data-has-sidebar][data-has-toc] .main-pane {
+    width: calc(100% - 18rem) !important;
+    max-width: calc(100% - 18rem) !important;
+  }
 }

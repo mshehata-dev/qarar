@@ -1,0 +1,128 @@
+---
+title: Performance & Empirical Benchmarks
+description: In-depth performance whitepaper featuring 1,000,000-row stress tests, sub-microsecond latency percentiles, memory profiling, and V8 optimization best practices.
+---
+
+import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+Qarar is engineered from the ground up for zero-allocation evaluation, high-throughput microsecond response times, and minimal memory overhead.
+
+All numbers below were captured using our official benchmarking suite (`@qarar/benchmark`) on **Node.js v22 (Apple Silicon arm64)** using monotonic nanosecond timers (`process.hrtime.bigint()`) and JIT warmup cycles.
+
+---
+
+## 🚀 1,000,000 Row Dataset Stress Test
+
+To simulate real-world production batch workloads, we evaluated **1,000,000 synthetic e-commerce records** across nested conditions (`age >= 21 AND tier IN ['vip', 'platinum'] AND cart.total >= 150 ...`):
+
+| Benchmark Target | Dataset Size | Throughput (Rows/Sec) | Mean Latency | p50 (Median) | p95 Latency | Heap Delta | Total Time |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **`evaluate()` (AST Tree)** | 1,000,000 rows | **3,016,127 rows/s** | 0.33 µs | 0.25 µs | 0.38 µs | +7.53 MB | **~330 ms** |
+| **`compileRule()` (Closure)** | 1,000,000 rows | **3,524,570 rows/s** | 0.28 µs | 0.25 µs | 0.29 µs | +7.24 MB | **~280 ms** |
+
+> [!TIP]
+> Qarar evaluates **one million rows in under 300 milliseconds** while adding less than **8 MB** to the Node.js heap. This makes it ideal for processing heavy Kafka streams, large CSV imports, and ETL pipelines.
+
+---
+
+## 🔬 In-Memory Microbenchmarks
+
+Evaluated over 100,000 warm iterations to measure pure execution latency without garbage collection interference:
+
+| Operation | Complexity | Throughput (ops/s) | p50 Latency | p95 Latency | Heap Impact |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`evaluate()` (Simple)** | Single comparison (`age >= 18`) | **5,559,854 ops/s** | **80 ns** | 210 ns | Minimal |
+| **`compileRule()` (Simple)** | Pre-compiled closure | **6,350,534 ops/s** | **80 ns** | 130 ns | Zero alloc |
+| **`evaluate()` (Medium)** | Multi-field (`age`, `tier IN [...]`, `cart >= 100`) | **2,537,626 ops/s** | **250 ns** | 630 ns | Minimal |
+| **`compileRule()` (Medium)** | Pre-compiled closure (Medium) | **3,306,787 ops/s** | **250 ns** | 250 ns | Zero alloc |
+| **`evaluate()` (Complex)** | Nested AND/OR + Array IN + Between | **1,460,096 ops/s** | **540 ns** | 1,380 ns | Minimal |
+| **`compileRule()` (Complex)** | Pre-compiled closure (Complex) | **1,615,253 ops/s** | **540 ns** | 580 ns | Zero alloc |
+| **`evaluate()` (FinTech)** | Multi-branch fraud detection rule | **2,124,260 ops/s** | **380 ns** | 460 ns | Minimal |
+| **`checkRule()` (Full)** | Validation + Evaluation + Human Explanations | **22,478 ops/s** | **41.8 µs** | 52.5 µs | Minimal |
+
+---
+
+## 🗄️ Database Query Compilers
+
+Compiling rules into database-native filters pushes execution directly to database B-Tree indexes, avoiding loading data into Node.js memory:
+
+| Compiler Target | Output | Throughput | Mean Time |
+| :--- | :--- | :--- | :--- |
+| **`compileToSQL()`** | Parameterized SQL `WHERE` clause | **639,652 compiles/s** | 1.56 µs |
+| **`compileToMongo()`** | Native MongoDB filter object (`{ $and: [...] }`) | **1,339,871 compiles/s** | 0.75 µs |
+
+---
+
+## 🔀 Decision Table Scaling
+
+Decision tables route multi-branch logic (like tiered pricing or risk matrix scoring):
+
+| Configuration | Evaluation Strategy | Throughput | Median (p50) |
+| :--- | :--- | :--- | :--- |
+| **10 Branches** | `mode: "first"` (Early exit on first match) | **1,852,864 ops/s** | 0.33 µs |
+| **10 Branches** | `mode: "all"` (Evaluates all 10 branches) | **620,622 ops/s** | 1.38 µs |
+| **50 Branches** | `mode: "first"` (Early exit on first match) | **2,153,116 ops/s** | 0.33 µs |
+| **50 Branches** | `mode: "all"` (Evaluates all 50 branches) | **125,546 ops/s** | 7.04 µs |
+
+---
+
+## 💡 Production Optimization Guidelines
+
+### 1. Pre-Compile Rules at Application Boot
+When evaluating the same rule across incoming requests or long-running loops, pre-compile the rule once:
+
+```ts
+import { compileRule } from "@qarar/sdk";
+
+// ❌ Inefficient: Re-validates AST schema on every incoming HTTP request
+app.post("/checkout", (req, res) => {
+  const isMatch = evaluate(promoRule, req.body).result;
+});
+
+// ✅ Blazing Fast: Compile once, call millions of times at ~3.5M ops/sec
+const checkPromo = compileRule(promoRule);
+
+app.post("/checkout", (req, res) => {
+  const isMatch = checkPromo(req.body);
+});
+```
+
+### 2. Push Down to Database First
+Before pulling 100,000 records from Postgres or MongoDB into Node.js, compile your rule into the query itself:
+
+```ts
+import { compileToSQL } from "@qarar/sdk";
+
+const { sql } = compileToSQL(eligibilityRule, { columnStyle: "snake" });
+
+// Let PostgreSQL's indexing and query engine do the heavy lifting
+const eligibleUsers = await db.query(`SELECT * FROM users WHERE ${sql}`);
+```
+
+### 3. Use `checkRule` On-Demand for Failures
+Because `checkRule` builds full human-readable explanation strings, it is roughly 100x slower than raw evaluation:
+- Run `compileRule` at maximum speed in your main processing pipeline.
+- If a record fails and an adverse action report is needed, invoke `checkRule` only on the failed record.
+
+---
+
+## 🧪 Reproducing Benchmarks Locally
+
+You can run the official benchmark suite directly on your own machine:
+
+```bash
+# Run micro-operation benchmarks
+pnpm bench:micro
+
+# Run 100,000-row dataset stress test
+pnpm bench:dataset
+
+# Run 1,000,000-row dataset stress test
+node packages/benchmark/dist/cli.js --suite dataset --rows 1000000
+
+# Run multi-branch decision table scaling
+pnpm bench:decision
+
+# Export Markdown or JSON report
+node packages/benchmark/dist/cli.js --suite all --format markdown
+```

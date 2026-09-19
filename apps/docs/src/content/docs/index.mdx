@@ -1,43 +1,101 @@
 ---
-title: "Qarar - Dynamic Business Rules Standard"
-description: "Update business logic live as JSON without touching code or redeploying servers."
+title: "Qarar — The Zero-Deploy Business Rules Standard"
+description: "Change business logic dynamically in JSON without modifying code or redeploying servers. Evaluates 3.5M+ rows/sec with 80ns median latency."
 template: splash
 hero:
-  tagline: "Change business rules dynamically in JSON without modifying code or redeploying applications."
+  tagline: "Stop hardcoding business logic in if/else chains. Define rules in JSON, store them in your database, and update production logic live in milliseconds."
   actions:
-    - text: "Quickstart: Zero-Deploy Rules"
+    - text: "Quickstart (5 Minutes)"
       link: /getting-started/quickstart/
       icon: right-arrow
       variant: primary
-    - text: "Try Live JSON Studio"
+    - text: "Open Interactive Studio"
       link: /playground/
       icon: external
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Card, CardGrid, Badge, LinkCard } from '@astrojs/starlight/components';
 import InteractivePlayground from '../../components/InteractivePlayground';
 
-> [!IMPORTANT]
-> **Why Qarar?** Hardcoding `if/else` logic forces code commits, code reviews, and server redeployments for every policy change. Qarar turns rules into dynamic JSON definitions stored in your database or CMS, so business logic updates happen live in seconds.
+## Performance at a Glance
+
+Empirical benchmarks run on **Node.js v22 (Apple Silicon arm64)** using monotonic nanosecond timers:
+
+| ⚡ Batch Throughput | ⏱️ Median Latency | 🚀 1M Rows Stress Test | 🗄️ Query Pushdown |
+| :---: | :---: | :---: | :---: |
+| **3,524,570 ops/s** | **80 nanoseconds** | **~280 ms** total | **640k SQL / 1.3M Mongo/s** |
+| Zero AST overhead closures | `p50` micro-operation latency | 1,000,000 rows evaluated | Database compiler throughput |
+
+---
+
+## The Problem: Hardcoded Business Logic
+
+```text
+  TRADITIONAL APPROACH: HARDCODED LOGIC
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │ Marketing changes discount ➔ Open PR ➔ Code Review ➔ CI/CD ➔ Deploy (Hours) │
+  └─────────────────────────────────────────────────────────────────────────────┘
+
+  QARAR APPROACH: DYNAMIC ZERO-DEPLOY AST
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │ Update Rule in Database / Admin UI ➔ Instant Execution in API (Milliseconds)│
+  └─────────────────────────────────────────────────────────────────────────────┘
+```
+
+When business requirements evolve, engineers shouldn't need to write code, open PRs, and wait for CI/CD deployments. **Qarar turns business logic into portable JSON ASTs.** Store rules in PostgreSQL, MongoDB, or Redis, evaluate them in Node.js at **3.5M+ rows/second**, or push them directly down into database queries.
+
+---
+
+## 30-Second Example
+
+Define a rule in JSON, evaluate any JavaScript data object, and get instant true/false results with human-readable explanations:
+
+```ts
+import { checkRule, rule } from "@qarar/sdk";
+
+// 1. Define rule (or fetch existing JSON AST from your database)
+const loyaltyGate = rule("VIP Checkout Discount")
+  .where("user.tier").in(["vip", "platinum"])
+  .and("cart.total").gte(100)
+  .build();
+
+// 2. Evaluate incoming request payload
+const { result, reasons } = checkRule(loyaltyGate, {
+  user: { tier: "bronze" },
+  cart: { total: 150 }
+});
+
+console.log(result);  
+// ➔ false
+
+console.log(reasons); 
+// ➔ ["user.tier: \"bronze\" is not in [vip, platinum]"]
+```
+
+---
+
+## Why Developers Choose Qarar
 
 <CardGrid stack>
-  <Card title="⚡ Zero Code Redeploys" icon="rocket">
-    Store rules as JSON in Postgres, MongoDB, or Redis. Change business policies in real time without rebuilding or redeploying your codebase.
+  <Card title="⚡ Zero-Deploy Business Logic" icon="rocket">
+    Store rules as JSON in Postgres, Mongo, or Redis. When product, risk, or operations teams modify a rule, API servers apply it immediately — no rebuilds, no deployments.
   </Card>
-  <Card title="🎨 Non-Developer Rule Management" icon="laptop">
-    Non-engineers (Product, Risk, Support, Operations) can visually author, audit, and update JSON rules using `@qarar/react-builder`.
+  <Card title="🏎️ Unrivaled In-Memory Throughput" icon="laptop">
+    Processes over 3.5 million records per second in memory with a micro-footprint (~7.5 MB heap delta per 1,000,000 rows).
   </Card>
-  <Card title="🔍 Instant Human Explainability" icon="information">
-    Never debug logs to figure out why a rule failed. Get human-readable explanations (`explainFailures`) for support tickets and audit trails.
+  <Card title="🔍 Built-In Human Explainability" icon="information">
+    Never grep through server logs to figure out why an order was rejected or a user was flagged. Get human-readable sentences for support reps and audit logs out of the box.
   </Card>
   <Card title="🗄️ Database Query Pushdown" icon="setting">
-    Compile JSON rules into high-performance SQL `WHERE` clauses and MongoDB filter objects before querying your database.
+    Compile the exact same rule into a parameterized SQL `WHERE` clause or MongoDB filter so you filter millions of rows in the database before loading them into Node.js.
   </Card>
 </CardGrid>
 
 ---
 
 ## Interactive Rule Studio
+
+Test rule evaluation, inspect execution traces, and view generated SQL/Mongo queries live in your browser:
 
 <div className="playground-container">
   <InteractivePlayground client:only="react" />

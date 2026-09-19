@@ -14,6 +14,7 @@ import type { FieldDef, SchemaConfig } from "./schema";
 import { defaultGroup, fromAST, toAST } from "./builderModel";
 import type { BuilderGroup } from "./builderModel";
 import { EXAMPLES, CATEGORY_COLORS } from "./examples";
+import { qararTokens } from "@qarar/theme";
 import { cn } from "./lib/utils";
 import {
   Play,
@@ -658,7 +659,7 @@ function PlaygroundSection({ dark }: { dark: boolean }) {
   }
 
   const current = examples.find((e) => e.id === selectedId) ?? defaultExample;
-  const catColor = CATEGORY_COLORS[current.category] ?? "#6c8ef5";
+  const catColor = CATEGORY_COLORS[current.category] ?? qararTokens.dark.primary;
 
   return (
     <div className="h-full flex overflow-hidden">
@@ -676,14 +677,14 @@ function PlaygroundSection({ dark }: { dark: boolean }) {
         {categories.map((cat) => (
           <div key={cat} className="mb-3">
             <div className="flex items-center gap-1.5 px-4 py-1">
-              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: CATEGORY_COLORS[cat] ?? "#6c8ef5" }} />
-              <span className="text-[9px] font-semibold uppercase tracking-widest" style={{ color: CATEGORY_COLORS[cat] ?? "#6c8ef5" }}>
+              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: CATEGORY_COLORS[cat] ?? qararTokens.dark.primary }} />
+              <span className="text-[9px] font-semibold uppercase tracking-widest" style={{ color: CATEGORY_COLORS[cat] ?? qararTokens.dark.primary }}>
                 {cat}
               </span>
             </div>
             {examples.filter((e) => e.category === cat).map((ex) => {
               const active = selectedId === ex.id;
-              const color = CATEGORY_COLORS[ex.category] ?? "#6c8ef5";
+              const color = CATEGORY_COLORS[ex.category] ?? qararTokens.dark.primary;
               return (
                 <button
                   key={ex.id}

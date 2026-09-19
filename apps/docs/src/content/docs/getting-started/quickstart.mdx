@@ -1,0 +1,174 @@
+---
+title: "Quickstart (5-Minute Walkthrough)"
+description: "Build, evaluate, explain, and push your first dynamic Qarar rule to a database query in under 5 minutes."
+---
+
+import { Steps, Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+This guide walks you through building your first dynamic business rule, evaluating data payloads, generating human-readable audit explanations, and pushing logic down to database queries.
+
+---
+
+<Steps>
+
+1. ### Define Your First Rule
+
+   Use the fluent `rule()` builder to construct a rule. In this example, we define eligibility requirements for a promotional discount:
+
+   ```ts
+   import { rule } from "@qarar/sdk";
+
+   export const promoRule = rule("Summer VIP Promo")
+     .id("promo_summer_2026")
+     .description("Grants 20% discount to VIP members with carts over $100")
+     .where("customer.age").gte(18)
+     .and("customer.tier").in(["gold", "vip"])
+     .and("cart.total").gte(100)
+     .build();
+   ```
+
+   Behind the scenes, `.build()` produces a portable, technology-agnostic **JSON Abstract Syntax Tree (AST)** that you can store in PostgreSQL, MongoDB, Redis, or an S3 bucket:
+
+   <details>
+   <summary>View Generated JSON AST</summary>
+
+   ```json
+   {
+     "id": "promo_summer_2026",
+     "name": "Summer VIP Promo",
+     "description": "Grants 20% discount to VIP members with carts over $100",
+     "version": "1",
+     "root": {
+       "type": "and",
+       "conditions": [
+         {
+           "type": "gte",
+           "left": { "type": "field", "path": "customer.age" },
+           "right": { "type": "number", "value": 18 }
+         },
+         {
+           "type": "in",
+           "left": { "type": "field", "path": "customer.tier" },
+           "right": {
+             "type": "array",
+             "values": [
+               { "type": "string", "value": "gold" },
+               { "type": "string", "value": "vip" }
+             ]
+           }
+         },
+         {
+           "type": "gte",
+           "left": { "type": "field", "path": "cart.total" },
+           "right": { "type": "number", "value": 100 }
+         }
+       ]
+     }
+   }
+   ```
+
+   </details>
+
+2. ### Evaluate and Inspect Human Explanations
+
+   Pass the rule and any incoming JavaScript object to `checkRule`. It returns both a boolean `result` and a list of human-readable `reasons` explaining why conditions passed or failed:
+
+   ```ts
+   import { checkRule } from "@qarar/sdk";
+
+   // A customer whose tier doesn't qualify
+   const incomingCart = {
+     customer: { age: 24, tier: "bronze" },
+     cart: { total: 150 },
+   };
+
+   const check = checkRule(promoRule, incomingCart);
+
+   console.log("Passed:", check.result);
+   // ➔ Passed: false
+
+   console.log("Failure Reasons:", check.reasons);
+   // ➔ Failure Reasons: ['customer.tier: "bronze" is not in [gold, vip]']
+   ```
+
+   > [!TIP]
+   > You can display `check.reasons` directly to users in error banners or save them to your audit log. No custom error-handling code required!
+
+3. ### Optimize for Production with `compileRule`
+
+   When evaluating rules inside high-throughput API handlers, event streams, or background workers, pre-compile the rule into an optimized closure:
+
+   ```ts
+   import { compileRule } from "@qarar/sdk";
+
+   // Compile once at startup (evaluates at 3,500,000+ ops/sec)
+   const isEligible = compileRule(promoRule);
+
+   // In your high-speed HTTP request handler
+   app.post("/api/checkout/apply-promo", (req, res) => {
+     const qualifies = isEligible(req.body);
+     res.json({ discountApplied: qualifies });
+   });
+   ```
+
+   | Method | Throughput | Best For |
+   | :--- | :--- | :--- |
+   | **`checkRule(rule, data)`** | **~22,500 ops/s** | User-facing forms, admin audits, customer support tools |
+   | **`compileRule(rule)`** | **~3,520,000 ops/s** | High-throughput APIs, stream consumers, Kafka/RabbitMQ |
+
+4. ### Push Rule to Database Queries
+
+   Instead of loading 100,000 customers into Node.js memory, compile the exact same rule into a SQL `WHERE` clause or MongoDB filter:
+
+   <Tabs>
+     <TabItem label="SQL (Postgres / MySQL / SQLite)">
+       ```ts
+       import { compileToSQL } from "@qarar/sdk";
+
+       const { sql } = compileToSQL(promoRule, { columnStyle: "snake" });
+       console.log(sql);
+       // ➔ customer_age >= 18 AND customer_tier IN ('gold', 'vip') AND cart_total >= 100
+
+       // Query database directly
+       const eligibleUsers = await db.query(
+         `SELECT id, email FROM customers WHERE ${sql}`
+       );
+       ```
+     </TabItem>
+     <TabItem label="MongoDB">
+       ```ts
+       import { compileToMongo } from "@qarar/sdk";
+
+       const { filter } = compileToMongo(promoRule);
+       
+       // Query MongoDB collection directly
+       const eligibleUsers = await db.collection("customers").find(filter).toArray();
+       ```
+     </TabItem>
+   </Tabs>
+
+5. ### Enable Zero-Deploy Updates
+
+   To achieve zero-deploy business logic in your system:
+
+   1. **Save Rule as JSON** in a `business_rules` table in PostgreSQL, MongoDB, or Redis.
+   2. **Fetch dynamically** at application startup and cache in memory.
+   3. **Invalidate Cache** via webhook or Redis Pub/Sub whenever an admin updates the rule.
+   4. **Result**: Your product team can change discount rules, fraud thresholds, or eligibility policies in seconds without touching code or waiting for CI/CD pipelines!
+
+</Steps>
+
+---
+
+## Next Steps
+
+<CardGrid>
+  <Card title="AST Specification" icon="document">
+    Explore the full specification of logical gates, comparison operators, and value nodes.
+    [Read Spec →](/concepts/ast-specification/)
+  </Card>
+  <Card title="Performance Whitepaper" icon="rocket">
+    Inspect empirical 1,000,000-row stress tests and sub-microsecond latency benchmarks.
+    [View Benchmarks →](/concepts/performance-optimization/)
+  </Card>
+</CardGrid>

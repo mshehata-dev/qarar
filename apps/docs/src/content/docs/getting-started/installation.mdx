@@ -1,0 +1,118 @@
+---
+title: Installation & Setup
+description: Install @qarar/sdk and optional visual builders or benchmarking tools in your JavaScript or TypeScript projects.
+---
+
+import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+Qarar is distributed as modular, type-safe packages on npm. For most applications, installing `@qarar/sdk` is all you need.
+
+---
+
+## 1. Install the Core SDK
+
+The core SDK contains the execution engine, fluent rule builder, schema validator, execution explainability helpers, and native SQL / MongoDB pushdown compilers.
+
+<Tabs>
+  <TabItem label="pnpm">
+    ```bash
+    pnpm add @qarar/sdk
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npm install @qarar/sdk
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```bash
+    yarn add @qarar/sdk
+    ```
+  </TabItem>
+  <TabItem label="bun">
+    ```bash
+    bun add @qarar/sdk
+    ```
+  </TabItem>
+</Tabs>
+
+### Package Footprint
+- **Runtime Dependencies**: Zero external dependencies in production engine.
+- **Unpacked Size**: ~18 KB.
+- **Tree-Shaking**: Fully ESM and CommonJS dual-packaged. If you only use `compileToSQL`, the rest of the engine is stripped from your frontend bundle.
+
+---
+
+## 2. Optional Packages
+
+Install additional packages depending on your application needs:
+
+<CardGrid>
+  <Card title="@qarar/react-builder" icon="laptop">
+    Embed a visual drag-and-drop rule authoring component in React admin portals:
+    ```bash
+    pnpm add @qarar/react-builder
+    ```
+  </Card>
+  <Card title="@qarar/benchmark" icon="setting">
+    Stress-test rules against datasets of 1,000,000+ rows and measure micro-latencies:
+    ```bash
+    pnpm add -D @qarar/benchmark
+    ```
+  </Card>
+</CardGrid>
+
+---
+
+## 3. TypeScript Configuration
+
+Qarar is written in strict TypeScript. For optimal type inference and autocompletion in your project, ensure your `tsconfig.json` includes:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  }
+}
+```
+
+> [!NOTE]
+> If you are using modern bundlers (Vite, Next.js 14+, Remix), `"moduleResolution": "bundler"` is also fully supported.
+
+---
+
+## 4. Runtime Compatibility
+
+Qarar contains no platform-specific C++ bindings or Node.js-only system APIs, making it universally portable:
+
+| Runtime | Compatibility Status | Tested Minimum Version |
+| :--- | :---: | :--- |
+| **Node.js** | ✅ Fully Supported | v18.0.0+ (Tested up to v22) |
+| **Bun** | ✅ Fully Supported | v1.0.0+ |
+| **Deno** | ✅ Fully Supported | v1.35.0+ |
+| **Cloudflare Workers** | ✅ Fully Supported | V8 Worker Runtime |
+| **Next.js Edge Runtime** | ✅ Fully Supported | Next.js 13+ / 14+ / 15+ |
+| **Modern Browsers** | ✅ Fully Supported | Chrome 90+, Firefox 88+, Safari 14+ |
+
+---
+
+## 5. Verify Installation
+
+Run this quick verification script to confirm everything is working properly:
+
+```ts
+import { rule, checkRule } from "@qarar/sdk";
+
+const adultGate = rule("Adult Age Verification")
+  .where("age").gte(18)
+  .build();
+
+const check = checkRule(adultGate, { age: 25 });
+
+console.log("Qarar initialized successfully:", check.result); // true
+```

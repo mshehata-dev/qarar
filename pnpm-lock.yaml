@@ -44,6 +44,9 @@ importers:
       '@qarar/spec':
         specifier: workspace:*
         version: link:../../packages/spec
+      '@qarar/theme':
+        specifier: workspace:*
+        version: link:../../packages/theme
       '@types/react':
         specifier: ^18.3.12
         version: 18.3.31
@@ -89,6 +92,9 @@ importers:
       '@qarar/spec':
         specifier: workspace:*
         version: link:../../packages/spec
+      '@qarar/theme':
+        specifier: workspace:*
+        version: link:../../packages/theme
       '@radix-ui/react-collapsible':
         specifier: ^1.1.13
         version: 1.1.13(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -157,6 +163,40 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
 
+  packages/benchmark:
+    dependencies:
+      '@qarar/compiler-mongo':
+        specifier: workspace:*
+        version: link:../compiler-mongo
+      '@qarar/compiler-sql':
+        specifier: workspace:*
+        version: link:../compiler-sql
+      '@qarar/engine-js':
+        specifier: workspace:*
+        version: link:../engine-js
+      '@qarar/explainability':
+        specifier: workspace:*
+        version: link:../explainability
+      '@qarar/sdk':
+        specifier: workspace:*
+        version: link:../sdk
+      '@qarar/spec':
+        specifier: workspace:*
+        version: link:../spec
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.4
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.4)(lightningcss@1.32.0)
+
   packages/compiler-mongo:
     dependencies:
       '@qarar/spec':
@@ -214,6 +254,9 @@ importers:
       '@qarar/spec':
         specifier: workspace:*
         version: link:../spec
+      '@qarar/theme':
+        specifier: workspace:*
+        version: link:../theme
     devDependencies:
       '@types/react':
         specifier: ^18.3.12
@@ -262,6 +305,12 @@ importers:
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@24.13.3)(lightningcss@1.32.0)
+
+  packages/theme:
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
 
 packages:
 
@@ -1788,6 +1837,9 @@ packages:
   '@types/nlcst@2.0.3':
     resolution: {integrity: sha512-vSYNSDe6Ix3q+6Z7ri9lyWqgGhJTmzRjZRqyq15N0Z/1/UnVsno9G/N40NBijoYx2seFDIl0+B2mgAb9mezUCA==}
 
+  '@types/node@22.20.4':
+    resolution: {integrity: sha512-zJRE40jpHtKqE/C4fgHrAKQLJuSpzEnP9ff9Y7YtoR3Wd2pwqzlekDeEuUQXjRd+QCYnVnNwuJYmhdk9XV8gvA==}
+
   '@types/node@24.13.3':
     resolution: {integrity: sha512-Dh8vAsV36ig5wa9OX4pXvMc9D3Veibfw2wix0CUwYODLD8nkj9UsLjASr49nPg+2eKzxhBV+v7L8pXvT4e639Q==}
 
@@ -3248,6 +3300,9 @@ packages:
 
   uncrypto@0.1.3:
     resolution: {integrity: sha512-Ql87qFHB3s/De2ClA9e0gsnS6zXG27SkTiSJwjCc9MebbfapQfuPzumMIUMi38ezPZVNFcHI9sUIepeQfw8J8Q==}
+
+  undici-types@6.21.0:
+    resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
   undici-types@7.18.2:
     resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
@@ -5038,6 +5093,10 @@ snapshots:
     dependencies:
       '@types/unist': 3.0.3
 
+  '@types/node@22.20.4':
+    dependencies:
+      undici-types: 6.21.0
+
   '@types/node@24.13.3':
     dependencies:
       undici-types: 7.18.2
@@ -5055,7 +5114,7 @@ snapshots:
 
   '@types/sax@1.2.7':
     dependencies:
-      '@types/node': 24.13.3
+      '@types/node': 22.20.4
 
   '@types/unist@2.0.11': {}
 
@@ -5081,6 +5140,14 @@ snapshots:
       '@vitest/utils': 2.1.9
       chai: 5.3.3
       tinyrainbow: 1.2.0
+
+  '@vitest/mocker@2.1.9(vite@5.4.21(@types/node@22.20.4)(lightningcss@1.32.0))':
+    dependencies:
+      '@vitest/spy': 2.1.9
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      vite: 5.4.21(@types/node@22.20.4)(lightningcss@1.32.0)
 
   '@vitest/mocker@2.1.9(vite@5.4.21(@types/node@24.13.3)(lightningcss@1.32.0))':
     dependencies:
@@ -7132,6 +7199,8 @@ snapshots:
 
   uncrypto@0.1.3: {}
 
+  undici-types@6.21.0: {}
+
   undici-types@7.18.2: {}
 
   undici@8.10.0: {}
@@ -7247,6 +7316,24 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
 
+  vite-node@2.1.9(@types/node@22.20.4)(lightningcss@1.32.0):
+    dependencies:
+      cac: 6.7.14
+      debug: 4.4.3
+      es-module-lexer: 1.7.0
+      pathe: 1.1.2
+      vite: 5.4.21(@types/node@22.20.4)(lightningcss@1.32.0)
+    transitivePeerDependencies:
+      - '@types/node'
+      - less
+      - lightningcss
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
+
   vite-node@2.1.9(@types/node@24.13.3)(lightningcss@1.32.0):
     dependencies:
       cac: 6.7.14
@@ -7264,6 +7351,16 @@ snapshots:
       - sugarss
       - supports-color
       - terser
+
+  vite@5.4.21(@types/node@22.20.4)(lightningcss@1.32.0):
+    dependencies:
+      esbuild: 0.21.5
+      postcss: 8.5.15
+      rollup: 4.62.0
+    optionalDependencies:
+      '@types/node': 22.20.4
+      fsevents: 2.3.3
+      lightningcss: 1.32.0
 
   vite@5.4.21(@types/node@24.13.3)(lightningcss@1.32.0):
     dependencies:
@@ -7293,6 +7390,41 @@ snapshots:
   vitefu@1.1.3(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)):
     optionalDependencies:
       vite: 6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
+
+  vitest@2.1.9(@types/node@22.20.4)(lightningcss@1.32.0):
+    dependencies:
+      '@vitest/expect': 2.1.9
+      '@vitest/mocker': 2.1.9(vite@5.4.21(@types/node@22.20.4)(lightningcss@1.32.0))
+      '@vitest/pretty-format': 2.1.9
+      '@vitest/runner': 2.1.9
+      '@vitest/snapshot': 2.1.9
+      '@vitest/spy': 2.1.9
+      '@vitest/utils': 2.1.9
+      chai: 5.3.3
+      debug: 4.4.3
+      expect-type: 1.3.0
+      magic-string: 0.30.21
+      pathe: 1.1.2
+      std-env: 3.10.0
+      tinybench: 2.9.0
+      tinyexec: 0.3.2
+      tinypool: 1.1.1
+      tinyrainbow: 1.2.0
+      vite: 5.4.21(@types/node@22.20.4)(lightningcss@1.32.0)
+      vite-node: 2.1.9(@types/node@22.20.4)(lightningcss@1.32.0)
+      why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@types/node': 22.20.4
+    transitivePeerDependencies:
+      - less
+      - lightningcss
+      - msw
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
 
   vitest@2.1.9(@types/node@24.13.3)(lightningcss@1.32.0):
     dependencies:

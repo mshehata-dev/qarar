@@ -1,0 +1,98 @@
+---
+title: FinTech Fraud Shield & Risk Routing
+description: Evaluate real-time transaction risk, flag anomalous devices, and route payments with dynamic decision tables.
+---
+
+import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+Financial applications require low-latency risk evaluation to prevent fraudulent chargebacks, account takeovers, and money laundering.
+
+This recipe demonstrates building a multi-signal fraud rule with nested boolean gates and routing payment outcomes using a decision table.
+
+---
+
+## 1. Multi-Signal Fraud Detection Rule
+
+A rule that flags a transaction if:
+- Machine-learning risk score $\ge 700$, **OR**
+- Transaction amount $\ge \$5,000$ from an unrecognized device, **OR**
+- 24-hour transaction velocity $\ge 10$ for unverified KYC accounts
+
+```ts
+import { rule, checkRule } from "@qarar/sdk";
+
+export const fraudShieldRule = rule("High-Risk Fraud Shield")
+  .id("fintech_fraud_v1")
+  .where("risk.score").gte(700)
+  .or(
+    rule()
+      .where("transaction.amount").gte(5000)
+      .and("device.isRecognized").eq(false)
+  )
+  .or(
+    rule()
+      .where("velocity.count24h").gte(10)
+      .and("user.kycTier").eq("tier0")
+  )
+  .build();
+```
+
+---
+
+## 2. Dynamic Risk Routing Table
+
+Instead of simple boolean pass/fail, financial systems route payments into distinct action workflows (`"APPROVE"`, `"SMS_CHALLENGE"`, `"MANUAL_REVIEW"`, `"BLOCK"`):
+
+```ts
+import { switchRule, evaluateDecisionTable } from "@qarar/sdk";
+
+export interface RiskAction {
+  action: "APPROVE" | "CHALLENGE" | "MANUAL_REVIEW" | "BLOCK";
+  reason: string;
+}
+
+export const riskRouter = switchRule<RiskAction>("Transaction Risk Routing")
+  .default({ action: "APPROVE", reason: "Standard low-risk transaction" })
+  // 1. Critical fraud ➔ Immediate Block
+  .case("block-rule", { action: "BLOCK", reason: "Severe risk score or high velocity on unverified account" }, (c) =>
+    c.where("risk.score").gte(850).or(
+      rule().where("velocity.count24h").gte(15).and("user.kycTier").eq("tier0")
+    )
+  )
+  // 2. Medium risk ➔ Route to compliance team
+  .case("review-rule", { action: "MANUAL_REVIEW", reason: "High value transaction from new device" }, (c) =>
+    c.where("transaction.amount").gte(5000).and("device.isRecognized").eq(false)
+  )
+  // 3. Low-moderate risk ➔ Send 2FA SMS code
+  .case("challenge-rule", { action: "CHALLENGE", reason: "Elevated risk score requires secondary factor" }, (c) =>
+    c.where("risk.score").gte(600)
+  )
+  .build();
+```
+
+---
+
+## 3. High-Throughput Payment Evaluation Pipeline
+
+In your payment gateway microservice, evaluate transactions in sub-microsecond time:
+
+```ts
+app.post("/api/payments/charge", async (req, res) => {
+  const transactionData = req.body;
+
+  // Evaluate risk table
+  const decision = evaluateDecisionTable(riskRouter, transactionData);
+
+  switch (decision.output.action) {
+    case "APPROVE":
+      return processPayment(transactionData);
+    case "CHALLENGE":
+      return triggerTwoFactorSMS(transactionData);
+    case "MANUAL_REVIEW":
+      await queueForComplianceAudit(transactionData, decision.output.reason);
+      return res.status(202).json({ status: "pending_review" });
+    case "BLOCK":
+      return res.status(403).json({ error: "Transaction declined by fraud shield" });
+  }
+});
+```

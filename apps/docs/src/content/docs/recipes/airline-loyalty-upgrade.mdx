@@ -1,0 +1,68 @@
+---
+title: "Airline Loyalty Lounge Access & Seat Upgrade Gate"
+description: "Qualifies passengers for executive airport lounge access and complimentary seat upgrades based on flight routes and frequent flyer status."
+---
+
+import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+Airlines manage frequent flyer entitlement logic across international and domestic routes with complex tier qualifications.
+
+This recipe demonstrates defining an airline loyalty gate, evaluating passengers during check-in, and providing immediate explanations for gate agents and mobile boarding passes.
+
+```text
+                                Flight Check-in Payload
+                                          │
+                                          ▼
+                      ┌───────────────────────────────────────┐
+                      │          Lounge Access Gate           │
+                      │  flight.isInternational = true        │
+                      │  AND passenger.status IN [gold, plat] │
+                      └───────────────────┬───────────────────┘
+                                          │
+                         ┌────────────────┴────────────────┐
+                         ▼                                 ▼
+                      🟢 PASS                           ❌ FAIL
+             "Welcome to Executive Lounge"      "Access Denied: Requires Gold/Platinum on Int'l"
+```
+
+---
+
+## 1. Rule Definition
+
+```ts
+import { rule, checkRule } from "@qarar/sdk";
+
+export const loungeAccessRule = rule("Executive Lounge Access")
+  .id("airline_lounge_v1")
+  .description("Grants lounge access to Gold and Platinum flyers on international routes")
+  .where("flight.isInternational").eq(true)
+  .and("passenger.tier").in(["gold", "platinum"])
+  .build();
+```
+
+---
+
+## 2. Check-In Kiosk & Boarding Pass Evaluation
+
+```ts
+// Scenario A: Domestic flight on Gold tier ➔ Denied
+const domesticGoldPassenger = {
+  flight: { isInternational: false, flightNumber: "AA104" },
+  passenger: { name: "Sarah Connor", tier: "gold" }
+};
+
+const check = checkRule(loungeAccessRule, domesticGoldPassenger);
+
+console.log("Eligible for Lounge:", check.result); // false
+console.log("Reason:", check.reasons);
+// ➔ ['flight.isInternational: false is not == true']
+
+// Scenario B: International flight on Platinum tier ➔ Approved
+const internationalPlatPassenger = {
+  flight: { isInternational: true, flightNumber: "BA178" },
+  passenger: { name: "John Doe", tier: "platinum" }
+};
+
+const passCheck = checkRule(loungeAccessRule, internationalPlatPassenger);
+console.log("Eligible for Lounge:", passCheck.result); // true
+```

@@ -1,0 +1,128 @@
+---
+title: Explainability & Audit Traces
+description: Turn opaque rule evaluations into clear, plain-English reasons for customer support, user error banners, and regulatory compliance.
+---
+
+import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+When an automated rule rejects a checkout discount, declines a loan application, or flags a security request, users and support agents inevitably ask: **"Why did this happen?"**
+
+In traditional architectures, answering that question requires engineers to grep through gigabytes of logs or write brittle, bespoke error messaging for every single condition.
+
+Qarar treats **explainability as a first-class primitive**. Every evaluation automatically records what happened, what was expected, and what was received.
+
+---
+
+## 1. Instant Explanations with `checkRule`
+
+`checkRule` provides instant failure explanations out of the box:
+
+```ts
+import { checkRule, rule } from "@qarar/sdk";
+
+const creditPolicy = rule("Credit Line Eligibility")
+  .where("applicant.creditScore").gte(700)
+  .and("applicant.debtToIncomeRatio").lte(0.35)
+  .and("applicant.employmentMonths").gte(24)
+  .build();
+
+const result = checkRule(creditPolicy, {
+  applicant: {
+    creditScore: 680,
+    debtToIncomeRatio: 0.42,
+    employmentMonths: 36,
+  }
+});
+
+console.log(result.result);  // false
+console.log(result.reasons);
+/*
+➔ [
+  'applicant.creditScore: 680 is not >= 700',
+  'applicant.debtToIncomeRatio: 0.42 is not <= 0.35'
+]
+*/
+```
+
+Notice that only the conditions that **failed** are included in `reasons`. Passing conditions (`employmentMonths: 36 >= 24`) are excluded to keep messages actionable.
+
+---
+
+## 2. Inspecting Raw Traces (`TraceEntry`)
+
+For automated logging, analytics, or debugging, `evaluate()` returns the complete array of `TraceEntry` records:
+
+```ts
+import { evaluate } from "@qarar/sdk";
+
+const { result, trace } = evaluate(creditPolicy, applicantPayload);
+```
+
+Each `TraceEntry` contains structured metadata:
+
+```ts
+interface TraceEntry {
+  path?: string;               // e.g. "applicant.creditScore"
+  operator?: string;           // e.g. "gte"
+  expected?: unknown;          // e.g. 700
+  actual?: unknown;            // e.g. 680
+  passed: boolean;             // e.g. false
+  message?: string;            // Human-readable summary
+  nodeType: string;            // Node kind (e.g. "gte", "and", "or")
+}
+```
+
+---
+
+## 3. Formatting Explanations (`explainFailures`)
+
+If your service uses `evaluate()` to capture traces, you can convert them into human-readable strings on demand:
+
+```ts
+import { evaluate, explainFailures } from "@qarar/sdk";
+
+const { trace } = evaluate(rule, data);
+const humanReadableReasons = explainFailures(trace);
+```
+
+### Custom Localization & Mapping
+You can map technical path names to localized, user-friendly labels before presenting them to end users:
+
+```ts
+const FIELD_LABELS: Record<string, string> = {
+  "applicant.creditScore": "Credit Score",
+  "applicant.debtToIncomeRatio": "Debt-to-Income Ratio",
+};
+
+const userFriendlyMessages = trace
+  .filter((t) => !t.passed && t.path)
+  .map((t) => {
+    const label = FIELD_LABELS[t.path!] || t.path;
+    return `${label} did not meet the required threshold.`;
+  });
+```
+
+---
+
+## 4. Regulatory & Compliance Audit Trails
+
+In regulated industries (FinTech, Healthcare, Insurance), automated decisions often require legal audit trails:
+
+- **GDPR Article 22**: Users have the right to obtain human intervention and understand the basis of automated decisions.
+- **Fair Credit Reporting Act (FCRA)**: Adverse action notices require specific reasons for credit denial.
+- **SOC 2 & HIPAA**: System access and security authorization decisions must produce immutable audit records.
+
+By persisting the JSON `trace` tree alongside transaction records, you maintain a 100% reproducible audit trail of every automated decision.
+
+---
+
+## 5. Performance Strategy
+
+| Execution Method | Throughput | Generates Explanations? | Recommended Use |
+| :--- | :--- | :---: | :--- |
+| **`compileRule`** | **~3,524,570 ops/s** | ❌ (Boolean only) | High-speed loops, Kafka consumers, microservices |
+| **`evaluate`** | **~2,537,626 ops/s** | ⚠️ (Raw trace tree) | Real-time APIs needing structured trace payloads |
+| **`checkRule`** | **~22,478 ops/s** | ✅ (Full strings) | User-facing endpoints, form error banners |
+
+> [!TIP]
+> **Hybrid Performance Pattern**: Run `compileRule` at maximum speed in your main processing pipeline. If a transaction fails and an adverse action report is needed, invoke `checkRule` only on the failed record to generate the human reason on demand.

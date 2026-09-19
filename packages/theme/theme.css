@@ -1,0 +1,131 @@
+/**
+ * @qarar/theme - Canonical Design System Stylesheet
+ * Single source of truth for all Qarar CSS custom properties.
+ * Primary: Indigo (#4f46e5 / #6366f1) | Accent: Electric Violet (#7c3aed / #8b5cf6)
+ */
+
+:root,
+html[data-theme='light'],
+.light {
+  /* Brand Primary */
+  --qarar-primary: #0096c7;
+  --qarar-primary-hover: #0077b6;
+  --qarar-primary-light: #48cae4;
+  --qarar-primary-subtle: #0096c720;
+  --qarar-primary-alpha: rgba(0, 150, 199, 0.12);
+
+  /* Brand Accent */
+  --qarar-accent: #a68a64;
+  --qarar-accent-hover: #8c7352;
+  --qarar-accent-light: #c2aa87;
+  --qarar-accent-subtle: #a68a6420;
+  --qarar-accent-alpha: rgba(166, 138, 100, 0.12);
+
+  /* Surfaces & Backgrounds */
+  --qarar-bg: #ffffff;
+  --qarar-surface: #f8fafc;
+  --qarar-surface-2: #ffffff;
+  --qarar-surface-3: #f1f5f9;
+  --qarar-surface-subtle: #f8fafc;
+
+  /* Borders & Rims */
+  --qarar-border: #e2e8f0;
+  --qarar-border-hover: #cbd5e1;
+  --qarar-border-subtle: #cbd5e1;
+
+  /* Typography & Ink */
+  --qarar-text: #0f172a;
+  --qarar-text-muted: #64748b;
+  --qarar-text-subtle: #94a3b8;
+
+  /* Code & Syntax */
+  --qarar-code-bg: #f8fafc;
+  --qarar-code-border: #e2e8f0;
+  --qarar-code-text: #8c7352;
+  --qarar-code-ts: #0077b6;
+
+  /* Inputs & Controls */
+  --qarar-input-bg: #ffffff;
+  --qarar-input-border: #cbd5e1;
+  --qarar-input-text: #0f172a;
+  --qarar-input-data: #10b981;
+
+  /* Status Colors */
+  --qarar-pass: #10b981;
+  --qarar-pass-bg: #10b98118;
+  --qarar-pass-border: #10b98140;
+  --qarar-fail: #ef4444;
+  --qarar-fail-bg: #ef444418;
+  --qarar-fail-border: #ef444440;
+  --qarar-warn: #f59e0b;
+  --qarar-warn-bg: #f59e0b18;
+  --qarar-warn-border: #f59e0b40;
+
+  /* Shadows */
+  --qarar-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --qarar-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  --qarar-shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+html[data-theme='dark'],
+[data-theme='dark'],
+.dark {
+  /* Brand Primary */
+  --qarar-primary: #0096c7;
+  --qarar-primary-hover: #48cae4;
+  --qarar-primary-light: #90e0ef;
+  --qarar-primary-subtle: #0096c726;
+  --qarar-primary-alpha: rgba(0, 150, 199, 0.2);
+
+  /* Brand Accent */
+  --qarar-accent: #a68a64;
+  --qarar-accent-hover: #c2aa87;
+  --qarar-accent-light: #ddcbbb;
+  --qarar-accent-subtle: #a68a6426;
+  --qarar-accent-alpha: rgba(166, 138, 100, 0.2);
+
+  /* Surfaces & Backgrounds */
+  --qarar-bg: #030712;
+  --qarar-surface: #0f172a;
+  --qarar-surface-2: #090d16;
+  --qarar-surface-3: #1e293b;
+  --qarar-surface-subtle: #0b0f19;
+
+  /* Borders & Rims */
+  --qarar-border: #1e293b;
+  --qarar-border-hover: #334155;
+  --qarar-border-subtle: #2a3447;
+
+  /* Typography & Ink */
+  --qarar-text: #f8fafc;
+  --qarar-text-muted: #94a3b8;
+  --qarar-text-subtle: #64748b;
+
+  /* Code & Syntax */
+  --qarar-code-bg: #0b0e17;
+  --qarar-code-border: #2e261d;
+  --qarar-code-text: #c2aa87;
+  --qarar-code-ts: #48cae4;
+
+  /* Inputs & Controls */
+  --qarar-input-bg: #020617;
+  --qarar-input-border: #1e293b;
+  --qarar-input-text: #f8fafc;
+  --qarar-input-data: #10b981;
+
+  /* Status Colors */
+  --qarar-pass: #10b981;
+  --qarar-pass-bg: #10b98122;
+  --qarar-pass-border: #10b98150;
+  --qarar-fail: #ef4444;
+  --qarar-fail-bg: #ef444422;
+  --qarar-fail-border: #ef444450;
+  --qarar-warn: #f59e0b;
+  --qarar-warn-bg: #f59e0b22;
+  --qarar-warn-border: #f59e0b50;
+
+  /* Shadows */
+  --qarar-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --qarar-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+  --qarar-shadow-lg: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+}

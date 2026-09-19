@@ -1,0 +1,98 @@
+---
+title: Healthcare HIPAA Consent & Claim Authorization
+description: Enforce patient privacy consents, emergency medical overrides, and automated HIPAA compliance audit trails.
+---
+
+import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+Healthcare applications handle sensitive Protected Health Information (PHI) subject to strict regulatory frameworks such as HIPAA (US) and GDPR (EU). Access to patient records and insurance claim approvals must be rigorously verified and immutably audited.
+
+This recipe demonstrates enforcing patient consent, supporting emergency service overrides, and capturing full compliance audit traces.
+
+---
+
+## 1. Consent & Claim Authorization Rule
+
+A medical procedure claim is authorized if:
+- Patient signed the active electronic consent form, **AND**
+- HIPAA privacy acknowledgment is active, **AND**
+- Either the procedure is pre-authorized by insurance, **OR** the service is an emergency override.
+
+```ts
+import { rule, checkRule } from "@qarar/sdk";
+
+export const hipaaClaimRule = rule("HIPAA Consent & Claim Authorization")
+  .id("healthcare_auth_v1")
+  .where("patient.consentSigned").eq(true)
+  .and("patient.hipaaAcknowledged").eq(true)
+  .and(
+    rule()
+      .where("claim.isPreAuthorized").eq(true)
+      .or(
+        rule().where("claim.serviceType").eq("emergency")
+      )
+  )
+  .build();
+```
+
+---
+
+## 2. Authorization Service with Immutable Audit Logging
+
+Evaluate incoming medical procedures and record the execution trace for regulatory compliance:
+
+```ts
+import { evaluate, explainFailures } from "@qarar/sdk";
+
+export async function authorizeMedicalClaim(claimPayload: Record<string, unknown>) {
+  // 1. Evaluate claim against HIPAA rule
+  const { result, trace } = evaluate(hipaaClaimRule, claimPayload);
+
+  // 2. Persist audit record for compliance audits
+  await db.auditLogs.create({
+    data: {
+      claimId: claimPayload.claim.id,
+      patientId: claimPayload.patient.id,
+      authorized: result,
+      // Store full execution trace tree for regulatory review
+      traceTree: JSON.stringify(trace),
+      timestamp: new Date(),
+    }
+  });
+
+  // 3. Return outcome
+  if (!result) {
+    const reasons = explainFailures(trace);
+    return {
+      status: "DENIED",
+      reasons,
+    };
+  }
+
+  return { status: "AUTHORIZED" };
+}
+```
+
+---
+
+## 3. Handling Audit Inquiries
+
+When a hospital administrator or compliance officer requests an explanation of why a claim was denied:
+
+```ts
+const sampleClaim = {
+  patient: { id: "p_101", consentSigned: true, hipaaAcknowledged: false },
+  claim: { id: "cl_552", isPreAuthorized: false, serviceType: "routine" }
+};
+
+const result = await authorizeMedicalClaim(sampleClaim);
+
+console.log(result.reasons);
+/*
+➔ [
+  'patient.hipaaAcknowledged: false is not == true',
+  'claim.isPreAuthorized: false is not == true',
+  'claim.serviceType: "routine" is not == "emergency"'
+]
+*/
+```

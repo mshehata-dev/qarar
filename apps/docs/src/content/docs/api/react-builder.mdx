@@ -1,0 +1,92 @@
+---
+title: React RuleBuilder UI (@qarar/react-builder)
+description: Embed visual rule authoring components directly in React web applications and internal admin tools.
+---
+
+import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+`@qarar/react-builder` provides a visual, drag-and-drop rule authoring component (`<RuleBuilder />`) designed for embedding into internal admin portals, SaaS dashboards, and workflow editors.
+
+It allows non-technical teams (Product Managers, Risk Analysts, Operations) to build and edit valid Qarar JSON AST rules without writing code.
+
+```bash
+pnpm add @qarar/react-builder
+```
+
+---
+
+## 1. Basic Usage
+
+The `<RuleBuilder />` is a fully controlled React component:
+
+```tsx
+import React, { useState } from "react";
+import { RuleBuilder, type FieldDefinition } from "@qarar/react-builder";
+import type { RuleNode } from "@qarar/spec";
+
+// 1. Define fields available for non-engineers to pick from
+const AVAILABLE_FIELDS: FieldDefinition[] = [
+  { path: "customer.age", label: "Customer Age", type: "number" },
+  { 
+    path: "customer.tier", 
+    label: "Customer Tier", 
+    type: "enum", 
+    options: ["bronze", "silver", "gold", "vip"] 
+  },
+  { path: "cart.total", label: "Cart Subtotal ($)", type: "number" },
+  { path: "customer.isVerified", label: "ID Verified", type: "boolean" },
+];
+
+export function AdminRuleEditor() {
+  const [ruleRoot, setRuleRoot] = useState<RuleNode>({
+    type: "and",
+    conditions: [
+      {
+        type: "gte",
+        left: { type: "field", path: "customer.age" },
+        right: { type: "number", value: 18 },
+      },
+    ],
+  });
+
+  return (
+    <div className="p-6 max-w-4xl mx-auto bg-white dark:bg-slate-900 rounded-lg shadow">
+      <h2 className="text-xl font-bold mb-4">Edit Promotional Rule</h2>
+      
+      <RuleBuilder
+        fields={AVAILABLE_FIELDS}
+        value={ruleRoot}
+        onChange={(updatedNode) => {
+          setRuleRoot(updatedNode);
+          console.log("Updated JSON AST:", updatedNode);
+        }}
+      />
+    </div>
+  );
+}
+```
+
+---
+
+## 2. Component Props
+
+| Prop | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| **`value`** | `Rule \| RuleNode` | Yes | The current rule or root node to render and edit. |
+| **`onChange`** | `(node: RuleNode) => void` | Yes | Callback fired whenever a condition or gate is modified. |
+| **`fields`** | `FieldDefinition[]` | Yes | List of fields users are allowed to choose from. |
+
+---
+
+## 3. Field Definitions
+
+Use `FieldDefinition` to configure how fields appear in the builder dropdowns:
+
+```ts
+interface FieldDefinition {
+  path: string;                                    // Data path (e.g. "order.shipping.country")
+  label: string;                                   // Display label in UI (e.g. "Shipping Country")
+  type: "string" | "number" | "boolean" | "enum";  // Input control type
+  options?: string[];                              // Select options (when type is "enum")
+}
+```

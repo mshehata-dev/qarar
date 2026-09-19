@@ -1,0 +1,142 @@
+---
+title: AST Specification
+description: Complete technical specification of the portable Qarar JSON Rule Abstract Syntax Tree (AST).
+---
+
+import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+Every Qarar rule is represented as a pure, portable JSON **Abstract Syntax Tree (AST)**. This design guarantees technology independence: rules can be authored in React, stored in PostgreSQL, compiled to MongoDB queries, or evaluated in Node.js, Bun, or Python.
+
+---
+
+## 1. Top-Level Container (`Rule`)
+
+A complete rule definition conforms to the `Rule` interface:
+
+```ts
+interface Rule {
+  id: string;              // Unique identifier (e.g. "ecom_vip_promo_v1")
+  name: string;            // Human-readable title
+  description?: string;    // Optional documentation or audit summary
+  version: string;         // SemVer or integer version string (e.g. "1")
+  root: RuleNode;          // Root AST node
+}
+```
+
+---
+
+## 2. Logical Gates (`and`, `or`, `not`)
+
+Logical gates combine multiple conditions into composite expressions:
+
+### `and` Gate
+Resolves `true` if **all** child conditions evaluate to `true`. Employs short-circuit evaluation:
+
+```json
+{
+  "type": "and",
+  "conditions": [
+    { "type": "gte", "left": { "type": "field", "path": "age" }, "right": { "type": "number", "value": 18 } },
+    { "type": "eq", "left": { "type": "field", "path": "country" }, "right": { "type": "string", "value": "US" } }
+  ]
+}
+```
+
+### `or` Gate
+Resolves `true` if **at least one** child condition evaluates to `true`:
+
+```json
+{
+  "type": "or",
+  "conditions": [
+    { "type": "eq", "left": { "type": "field", "path": "tier" }, "right": { "type": "string", "value": "vip" } },
+    { "type": "gte", "left": { "type": "field", "path": "spend" }, "right": { "type": "number", "value": 1000 } }
+  ]
+}
+```
+
+### `not` Gate
+Inverts the boolean outcome of its inner child condition:
+
+```json
+{
+  "type": "not",
+  "condition": {
+    "type": "eq",
+    "left": { "type": "field", "path": "user.isBlocked" },
+    "right": { "type": "boolean", "value": true }
+  }
+}
+```
+
+---
+
+## 3. Comparison Operators
+
+Qarar supports a rich set of comparison operators that map cleanly to both JavaScript evaluation and database query engines:
+
+| Operator | Type | Description | Left Type | Right Type | Example JSON |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`eq`** | Binary | Strict equality | Any | Scalar | `{ "type": "eq", "left": ..., "right": ... }` |
+| **`neq`** | Binary | Strict inequality | Any | Scalar | `{ "type": "neq", "left": ..., "right": ... }` |
+| **`gt`** | Binary | Greater than | Number | Number | `{ "type": "gt", "left": ..., "right": 100 }` |
+| **`gte`** | Binary | Greater than or equal | Number | Number | `{ "type": "gte", "left": ..., "right": 18 }` |
+| **`lt`** | Binary | Less than | Number | Number | `{ "type": "lt", "left": ..., "right": 50 }` |
+| **`lte`** | Binary | Less than or equal | Number | Number | `{ "type": "lte", "left": ..., "right": 10 }` |
+| **`in`** | Binary | Array membership | Scalar | Array | `{ "type": "in", "left": ..., "right": { "type": "array", "values": [...] } }` |
+| **`notIn`** | Binary | Array non-membership | Scalar | Array | `{ "type": "notIn", "left": ..., "right": { ... } }` |
+| **`between`** | Ternary | Numeric range (inclusive) | Number | `min`, `max` | `{ "type": "between", "left": ..., "min": 18, "max": 65 }` |
+| **`contains`** | Binary | Substring or array element | String/Array | String | `{ "type": "contains", "left": ..., "right": "promo" }` |
+| **`startsWith`** | Binary | String prefix check | String | String | `{ "type": "startsWith", "left": ..., "right": "VIP-" }` |
+| **`endsWith`** | Binary | String suffix check | String | String | `{ "type": "endsWith", "left": ..., "right": "@corp.com" }` |
+| **`matches`** | Binary | Regex pattern evaluation | String | String (Regex) | `{ "type": "matches", "left": ..., "right": "^[A-Z]{3}$" }` |
+| **`isNull`** | Unary | Null or undefined check | Any | `{ "type": "null" }` | `{ "type": "isNull", "left": ... }` |
+| **`isNotNull`** | Unary | Not null/undefined check | Any | `{ "type": "null" }` | `{ "type": "isNotNull", "left": ... }` |
+
+---
+
+## 4. Value Nodes & Field Nodes
+
+Expressions compare **Field Nodes** against **Value Nodes**:
+
+### Field Node (`FieldNode`)
+References a dynamic path in the input data payload. Paths use dot notation:
+
+```json
+{
+  "type": "field",
+  "path": "customer.orders.0.total"
+}
+```
+
+- **Dot Notation**: Navigates nested objects (`customer.profile.age`).
+- **Array Indexing**: Navigates arrays by index (`orders.0.amount`).
+- **Safe Resolution**: If any intermediate property is `null` or `undefined`, the field safely resolves to `undefined` without throwing `TypeError: Cannot read properties of undefined`.
+- **Security Sandboxing**: Direct access to `__proto__`, `prototype`, or `constructor` keys is strictly blocked to prevent prototype pollution.
+
+### Value Node (`ValueNode`)
+Represents literal constant values:
+
+```json
+{ "type": "string", "value": "vip" }
+{ "type": "number", "value": 99.95 }
+{ "type": "boolean", "value": true }
+{ "type": "null" }
+{ "type": "array", "values": [{ "type": "string", "value": "a" }, { "type": "string", "value": "b" }] }
+```
+
+---
+
+## 5. Schema Validation
+
+Qarar provides strict runtime schema validation via `@qarar/spec` and Zod:
+
+```ts
+import { validateRule } from "@qarar/sdk";
+
+const { valid, errors } = validateRule(untrustedJSON);
+
+if (!valid) {
+  console.error("Invalid rule definition:", errors);
+}
+```

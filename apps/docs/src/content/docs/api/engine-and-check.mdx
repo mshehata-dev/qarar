@@ -1,0 +1,96 @@
+---
+title: Engine & checkRule API
+description: Complete API reference for checkRule, compileRule, and evaluate execution methods.
+---
+
+import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+Qarar provides three core execution methods tailored for different performance and observability needs:
+
+| Method | Throughput | Return Value | Primary Use Case |
+| :--- | :--- | :--- | :--- |
+| **`compileRule()`** | **~3,520,000 ops/s** | `(data) => boolean` | High-throughput APIs, stream consumers, batch jobs |
+| **`evaluate()`** | **~2,500,000 ops/s** | `{ result, trace }` | Execution audit trails and telemetry |
+| **`checkRule()`** | **~22,500 ops/s** | `{ result, valid, reasons, trace }` | User-facing endpoints, form validations, admin tooling |
+
+---
+
+## 1. `compileRule(rule)`
+
+Compiles a rule AST once into an optimized evaluation closure. Delivers maximum execution throughput and zero allocation overhead during repeated calls:
+
+```ts
+import { compileRule, rule } from "@qarar/sdk";
+
+const myRule = rule("VIP Gate").where("age").gte(18).build();
+
+// Compile once at startup
+const isEligible = compileRule(myRule);
+
+// Call millions of times at ~3.5M ops/sec
+const passes = isEligible({ age: 24 });
+console.log(passes); // true
+```
+
+### Signature
+```ts
+function compileRule(rule: Rule): (data: unknown) => boolean;
+```
+
+---
+
+## 2. `checkRule(rule, data, options?)`
+
+All-in-one checker that validates the rule AST schema, evaluates the payload, and formats human-readable failure explanations:
+
+```ts
+import { checkRule, rule } from "@qarar/sdk";
+
+const myRule = rule("VIP Gate")
+  .where("customer.age").gte(18)
+  .and("customer.tier").in(["gold", "vip"])
+  .build();
+
+const check = checkRule(myRule, { customer: { age: 16, tier: "bronze" } });
+
+console.log(check.result);  // false
+console.log(check.valid);   // true (rule AST schema is valid)
+console.log(check.reasons); 
+/*
+➔ [
+  'customer.age: 16 is not >= 18',
+  'customer.tier: "bronze" is not in [gold, vip]'
+]
+*/
+```
+
+### Return Value (`CheckRuleResult`)
+```ts
+interface CheckRuleResult {
+  result: boolean;         // Boolean outcome of evaluation
+  valid: boolean;          // Whether the rule AST schema is valid
+  reasons: string[];       // Human-readable failure explanation strings
+  trace: TraceEntry[];     // Condition-level trace entries
+  errors?: string[];       // AST validation errors if the rule is malformed
+}
+```
+
+---
+
+## 3. `evaluate(rule, data)`
+
+The core in-memory evaluation engine. Evaluates the condition tree and generates an execution trace without additional formatting overhead:
+
+```ts
+import { evaluate } from "@qarar/sdk";
+
+const { result, trace } = evaluate(myRule, { customer: { age: 24 } });
+```
+
+### Return Value (`EvaluationResult`)
+```ts
+interface EvaluationResult {
+  result: boolean;
+  trace: TraceEntry[];
+}
+```

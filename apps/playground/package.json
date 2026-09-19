@@ -15,6 +15,7 @@
     "@qarar/engine-js": "workspace:*",
     "@qarar/sdk": "workspace:*",
     "@qarar/spec": "workspace:*",
+    "@qarar/theme": "workspace:*",
     "@radix-ui/react-collapsible": "^1.1.13",
     "@radix-ui/react-select": "^2.3.0",
     "@radix-ui/react-separator": "^1.1.9",

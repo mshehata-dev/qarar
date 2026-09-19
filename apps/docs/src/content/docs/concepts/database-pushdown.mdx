@@ -1,0 +1,99 @@
+---
+title: Database Query Pushdown
+description: Compile portable Qarar JSON rules directly into SQL WHERE expressions and MongoDB query filters to avoid out-of-memory bottlenecks.
+---
+
+import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+When applying business rules across large datasets, pulling 500,000 records from your database into Node.js memory just to run `records.filter(r => evaluate(rule, r))` causes severe memory bloat, high network serialization costs, and potential Out-Of-Memory (OOM) crashes.
+
+**Database Pushdown** allows you to compile the exact same rule AST into a native database query. The database engine filters rows directly using its native B-Tree indexes, and only matching rows are transferred over the wire.
+
+```text
+                     Portable JSON Rule AST
+                               │
+               ┌───────────────┴───────────────┐
+               ▼                               ▼
+       compileToSQL()                  compileToMongo()
+               │                               │
+               ▼                               ▼
+  SELECT * FROM customers        db.customers.find({
+  WHERE age >= 18 AND ...          "age": { "$gte": 18 }, ...
+  (640k compiles/sec)            }) (1.3M compiles/sec)
+```
+
+---
+
+## 1. Compiling to SQL
+
+Use `compileToSQL` to transform a rule AST into a valid SQL `WHERE` clause:
+
+```ts
+import { compileToSQL, rule } from "@qarar/sdk";
+
+const promoRule = rule("Summer VIP")
+  .where("customer.age").gte(18)
+  .and("customer.tier").in(["gold", "vip"])
+  .and("cart.total").gte(100)
+  .build();
+
+const { sql } = compileToSQL(promoRule, { columnStyle: "snake" });
+
+console.log(sql);
+// ➔ customer_age >= 18 AND customer_tier IN ('gold', 'vip') AND cart_total >= 100
+
+// Query database with PostgreSQL, MySQL, SQLite, Knex, or Kysely
+const matchingCustomers = await db.query(
+  `SELECT id, email FROM customers WHERE ${sql}`
+);
+```
+
+### Column Naming Styles
+
+Databases organize column names differently. Configure `columnStyle` to match your schema:
+
+| Style | Field Path in Rule | Resulting SQL Identifier | Best For |
+| :--- | :--- | :--- | :--- |
+| `"snake"` (default) | `"customer.age"` | `customer_age` | Relational tables with flattened snake_case columns |
+| `"path"` | `"customer.age"` | `customer.age` | Tables using JSONB paths or table aliases |
+| `"quote"` | `"customer.age"` | `"customer"."age"` | Preserving exact case or reserved SQL keywords |
+
+---
+
+## 2. Compiling to MongoDB
+
+Use `compileToMongo` to transform a rule AST into a native MongoDB filter object:
+
+```ts
+import { compileToMongo } from "@qarar/sdk";
+
+const { filter } = compileToMongo(promoRule);
+
+console.log(JSON.stringify(filter, null, 2));
+/*
+{
+  "$and": [
+    { "customer.age": { "$gte": 18 } },
+    { "customer.tier": { "$in": ["gold", "vip"] } },
+    { "cart.total": { "$gte": 100 } }
+  ]
+}
+*/
+
+// Execute with native MongoDB driver or Mongoose
+const matchingDocs = await db.collection("customers").find(filter).toArray();
+```
+
+---
+
+## ⚡ Compilation Performance
+
+Qarar compilers translate ASTs in sub-microsecond time with zero dependencies:
+
+| Method | Target Output | Throughput | Mean Compilation Time |
+| :--- | :--- | :--- | :--- |
+| **`compileToSQL`** | SQL WHERE clause string | **639,652 compiles/s** | **1.56 µs** |
+| **`compileToMongo`** | MongoDB query filter object | **1,339,871 compiles/s** | **0.75 µs** |
+
+> [!TIP]
+> Because compiling takes less than 2 microseconds, you can safely compile dynamic rules on every incoming API request without caching or measurable latency impact.

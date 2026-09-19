@@ -1,0 +1,104 @@
+---
+title: NestJS Rule Guard & Custom Decorator
+description: Enforce dynamic business rules in enterprise NestJS applications using custom decorators and CanActivate guards.
+---
+
+import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+In enterprise NestJS architectures, route guards protect controller methods based on user roles, permissions, and dynamic business policies.
+
+This recipe demonstrates creating a custom `@EnforceRule()` decorator and a global or controller-level `CanActivate` guard powered by `@qarar/sdk`.
+
+---
+
+## 1. Custom Decorator (`rule.decorator.ts`)
+
+```ts
+import { SetMetadata } from "@nestjs/common";
+import type { Rule } from "@qarar/sdk";
+
+export const RULE_METADATA_KEY = "qarar_business_rule";
+
+/**
+ * Decorates a controller handler with a Qarar business rule.
+ */
+export const EnforceRule = (rule: Rule) => SetMetadata(RULE_METADATA_KEY, rule);
+```
+
+---
+
+## 2. NestJS Guard (`rule.guard.ts`)
+
+```ts
+import { 
+  Injectable, 
+  CanActivate, 
+  ExecutionContext, 
+  ForbiddenException 
+} from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { checkRule, Rule } from "@qarar/sdk";
+import { RULE_METADATA_KEY } from "./rule.decorator";
+
+@Injectable()
+export class QararRuleGuard implements CanActivate {
+  constructor(private reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const targetRule = this.reflector.get<Rule>(
+      RULE_METADATA_KEY, 
+      context.getHandler()
+    );
+
+    // If no rule is attached to the route, allow access
+    if (!targetRule) return true;
+
+    const request = context.switchToHttp().getRequest();
+    const evaluationContext = {
+      user: request.user,
+      body: request.body,
+      params: request.params,
+    };
+
+    const check = checkRule(targetRule, evaluationContext);
+
+    if (!check.result) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: "Forbidden",
+        message: "Request failed business rule policy verification",
+        reasons: check.reasons,
+      });
+    }
+
+    return true;
+  }
+}
+```
+
+---
+
+## 3. Usage in Controller
+
+```ts
+import { Controller, Post, Body, UseGuards } from "@nestjs/common";
+import { rule } from "@qarar/sdk";
+import { QararRuleGuard } from "./rule.guard";
+import { EnforceRule } from "./rule.decorator";
+
+// Define policy
+const highTierLoanPolicy = rule("High-Value Loan Approval")
+  .where("user.kycTier").eq("tier3")
+  .and("body.loanAmount").lte(500000)
+  .build();
+
+@Controller("loans")
+@UseGuards(QararRuleGuard)
+export class LoanController {
+  @Post("apply")
+  @EnforceRule(highTierLoanPolicy)
+  async applyForLoan(@Body() loanData: any) {
+    return { status: "Application submitted successfully" };
+  }
+}
+```

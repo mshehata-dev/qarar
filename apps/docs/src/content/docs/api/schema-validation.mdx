@@ -1,0 +1,68 @@
+---
+title: Schema Validation API (createQarar)
+description: Bind Qarar to Zod domain schemas to enforce runtime payload data validation before rule execution.
+---
+
+import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+When building mission-critical services, evaluating rules against untrusted or malformed input payloads can lead to silent false negatives.
+
+`createQarar` binds Qarar to a **Zod** schema. It automatically validates incoming data payloads before executing rules, ensuring that missing fields or type mismatches are caught immediately.
+
+---
+
+## 1. `createQarar(zodSchema)`
+
+```ts
+import { z } from "zod";
+import { createQarar } from "@qarar/sdk";
+
+// 1. Define strict domain schema using Zod
+export const CustomerContextSchema = z.object({
+  customer: z.object({
+    id: z.string(),
+    age: z.number().int().min(0),
+    tier: z.enum(["bronze", "silver", "gold", "vip"]),
+  }),
+  cart: z.object({
+    total: z.number().nonnegative(),
+    itemCount: z.number().int().positive(),
+  }),
+});
+
+// 2. Create schema-bound Qarar instance
+export const q = createQarar(CustomerContextSchema);
+```
+
+---
+
+## 2. Schema-Enforced Evaluation
+
+Use `q.check(rule, payload)` to validate input data and evaluate in a single step:
+
+```ts
+// 3. Build rule
+const promoRule = q.rule("VIP Checkout Promo")
+  .where("customer.age").gte(18)
+  .and("customer.tier").in(["gold", "vip"])
+  .and("cart.total").gte(100)
+  .build();
+
+// Case A: Valid Payload ➔ Evaluates rule
+const validCheck = q.check(promoRule, {
+  customer: { id: "cust_123", age: 24, tier: "vip" },
+  cart: { total: 150, itemCount: 2 },
+});
+
+console.log(validCheck.ok);      // true (Schema valid)
+console.log(validCheck.result);  // true (Rule passed)
+
+// Case B: Malformed Payload (age is negative string) ➔ Caught by Zod
+const invalidCheck = q.check(promoRule, {
+  customer: { id: "cust_123", age: "invalid-age", tier: "vip" },
+  cart: { total: 150, itemCount: 2 },
+});
+
+console.log(invalidCheck.ok);     // false (Schema invalid!)
+console.log(invalidCheck.errors); // Zod issues detailing invalid field types
+```

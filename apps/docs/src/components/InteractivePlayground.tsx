@@ -1,35 +1,49 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   rule,
+  switchRule,
   checkRule,
+  checkDecisionTable,
   compileToSQL,
   compileToMongo,
   Rule,
   RuleNode,
+  DecisionTable,
   TraceEntry,
 } from "@qarar/sdk";
 import { RuleBuilder } from "@qarar/react-builder";
+import { getThemeTokens, qararTokens, type QararTheme } from "@qarar/theme";
 
 // ---------------------------------------------------------------------------
 // Presets Definition
 // ---------------------------------------------------------------------------
 
+interface FieldDef {
+  path: string;
+  label: string;
+  type?: "string" | "number" | "boolean" | "enum";
+}
+
 interface Preset {
   id: string;
   title: string;
-  badge?: string;
+  category: "E-Commerce" | "FinTech" | "Decision Table" | "SaaS" | "Healthcare" | "Travel";
+  badgeColor: string;
   description: string;
-  rule: Rule;
+  isDecisionTable?: boolean;
+  rule?: Rule;
+  decisionTable?: DecisionTable<unknown>;
   sampleData: Record<string, unknown>;
-  fields: { path: string; label: string; type?: "string" | "number" | "boolean" | "enum" }[];
+  fields: FieldDef[];
 }
 
 const PRESETS: Preset[] = [
   {
     id: "ecommerce",
-    title: "🛒 E-Commerce VIP Discount",
-    badge: "E-Commerce",
-    description: "Applies 20% discount if customer is 18+, on a VIP/Premium plan, and total cart exceeds $100.",
+    title: "🛒 E-Commerce VIP Discount Gate",
+    category: "E-Commerce",
+    badgeColor: qararTokens.dark.primary,
+    description: "Grants 20% discount if customer is 18+, on a VIP/Premium plan, and cart exceeds $100.",
     rule: rule("VIP Discount Gate")
       .id("discount-v1")
       .where("customer.age")
@@ -50,8 +64,36 @@ const PRESETS: Preset[] = [
     ],
   },
   {
+    id: "decision-matrix",
+    title: "🔀 Pricing Tier Switch Matrix",
+    category: "Decision Table",
+    badgeColor: qararTokens.dark.accent,
+    description: "Dynamic switch case evaluating customer tier & cart total to return specific discount & shipping perks.",
+    isDecisionTable: true,
+    decisionTable: switchRule<{ discountPercent: number; freeShipping: boolean; tierLabel: string }>("Customer Pricing Matrix")
+      .id("pricing-tier-matrix")
+      .case("vip-branch", rule().where("customer.tier").eq("vip").and("cart.total").gte(200))
+        .then({ discountPercent: 25, freeShipping: true, tierLabel: "VIP Platinum" })
+      .case("gold-branch", rule().where("customer.tier").eq("gold").and("cart.total").gte(100))
+        .then({ discountPercent: 15, freeShipping: true, tierLabel: "Gold Tier" })
+      .case("silver-branch", rule().where("customer.tier").eq("silver"))
+        .then({ discountPercent: 5, freeShipping: false, tierLabel: "Silver Tier" })
+      .default({ discountPercent: 0, freeShipping: false, tierLabel: "Standard Tier" })
+      .build(),
+    sampleData: {
+      customer: { tier: "vip" },
+      cart: { total: 250 },
+    },
+    fields: [
+      { path: "customer.tier", label: "Customer Tier", type: "enum" },
+      { path: "cart.total", label: "Cart Total ($)", type: "number" },
+    ],
+  },
+  {
     id: "fintech",
     title: "🛡️ FinTech Risk & Fraud Assessment",
+    category: "FinTech",
+    badgeColor: qararTokens.dark.fail,
     description: "Flags high-value transactions (> $5,000) when the user is unverified or located in a flagged region.",
     rule: rule("High Value Fraud Gate")
       .id("risk-gate-v1")
@@ -78,7 +120,9 @@ const PRESETS: Preset[] = [
   },
   {
     id: "saas",
-    title: "🚀 SaaS Enterprise Feature Flag",
+    title: "🚀 SaaS Enterprise Feature Gate",
+    category: "SaaS",
+    badgeColor: qararTokens.dark.pass,
     description: "Unlocks advanced analytics for Admins, or Enterprise accounts with 50 or fewer seats.",
     rule: rule("Analytics Entitlement Gate")
       .id("entitlement-analytics")
@@ -105,7 +149,9 @@ const PRESETS: Preset[] = [
   },
   {
     id: "hipaa",
-    title: "🔒 Health & Privacy Data Gate",
+    title: "🔒 Medical Privacy & Consent Gate",
+    category: "Healthcare",
+    badgeColor: qararTokens.dark.warn,
     description: "Grants access if patient consent is verified, age >= 21, and data region matches 'EU' or 'US'.",
     rule: rule("Medical Privacy Gate")
       .id("privacy-hipaa-v1")
@@ -128,8 +174,10 @@ const PRESETS: Preset[] = [
   },
   {
     id: "airline",
-    title: "✈️ Loyalty Upgrade Gate",
-    description: "Qualifies passenger for lounge access if flight is International and frequent flyer status is Gold or Platinum.",
+    title: "✈️ Loyalty Lounge Upgrade Gate",
+    category: "Travel",
+    badgeColor: qararTokens.dark.primaryLight,
+    description: "Qualifies passenger for lounge access if flight is International and flyer status is Gold or Platinum.",
     rule: rule("Lounge Access Gate")
       .id("loyalty-lounge-v1")
       .where("flight.isInternational")
@@ -188,17 +236,40 @@ function generateTSCode(node: RuleNode, indent = "  "): string {
 // ---------------------------------------------------------------------------
 
 export default function InteractivePlayground() {
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [activePreset, setActivePreset] = useState<Preset>(PRESETS[0]);
-  const [currentRule, setCurrentRule] = useState<Rule>(PRESETS[0].rule);
+  const [currentRule, setCurrentRule] = useState<Rule>(PRESETS[0].rule!);
+  const [currentDecisionTable, setCurrentDecisionTable] = useState<DecisionTable<unknown> | undefined>(PRESETS[0].decisionTable);
   const [dataInput, setDataInput] = useState<string>(
     JSON.stringify(PRESETS[0].sampleData, null, 2)
   );
   const [jsonText, setJsonText] = useState<string>(
-    JSON.stringify(PRESETS[0].rule, null, 2)
+    JSON.stringify(PRESETS[0].isDecisionTable ? PRESETS[0].decisionTable : PRESETS[0].rule, null, 2)
   );
-  const [editorTab, setEditorTab] = useState<"visual" | "json" | "ts">("visual");
+  const [editorTab, setEditorTab] = useState<"visual" | "matrix" | "json" | "ts">("visual");
   const [sqlStyle, setSqlStyle] = useState<"snake" | "quote" | "path">("snake");
   const [copied, setCopied] = useState<string | null>(null);
+
+  // Sync theme with Starlight html data-theme
+  useEffect(() => {
+    const updateTheme = () => {
+      const current = document.documentElement.getAttribute("data-theme");
+      setTheme(current === "light" ? "light" : "dark");
+    };
+    updateTheme();
+
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  const isDark = theme === "dark";
+
+  // Dynamic theme tokens from @qarar/theme
+  const t = getThemeTokens(isDark);
 
   function copyToClipboard(text: string, label: string) {
     navigator.clipboard.writeText(text);
@@ -208,8 +279,15 @@ export default function InteractivePlayground() {
 
   function loadPreset(p: Preset) {
     setActivePreset(p);
-    setCurrentRule(p.rule);
-    setJsonText(JSON.stringify(p.rule, null, 2));
+    if (p.isDecisionTable && p.decisionTable) {
+      setCurrentDecisionTable(p.decisionTable);
+      setJsonText(JSON.stringify(p.decisionTable, null, 2));
+      setEditorTab("matrix");
+    } else if (p.rule) {
+      setCurrentRule(p.rule);
+      setJsonText(JSON.stringify(p.rule, null, 2));
+      setEditorTab("visual");
+    }
     setDataInput(JSON.stringify(p.sampleData, null, 2));
   }
 
@@ -226,11 +304,15 @@ export default function InteractivePlayground() {
     setJsonText(text);
     try {
       const parsed = JSON.parse(text);
-      if (parsed && typeof parsed === "object" && "root" in parsed) {
-        setCurrentRule(parsed);
+      if (parsed && typeof parsed === "object") {
+        if ("branches" in parsed) {
+          setCurrentDecisionTable(parsed as DecisionTable<unknown>);
+        } else if ("root" in parsed) {
+          setCurrentRule(parsed as Rule);
+        }
       }
     } catch {
-      // ignore parsing errors while typing
+      // ignore JSON parse errors while typing
     }
   }
 
@@ -242,11 +324,27 @@ export default function InteractivePlayground() {
     jsonError = true;
   }
 
-  const checkResult = checkRule(currentRule, testDataObj);
-  const sqlResult = compileToSQL(currentRule, { columnStyle: sqlStyle });
-  const mongoCompiled = compileToMongo(currentRule);
+  // Live Rule Evaluation & Pushdown Compilation
+  const isDecision = activePreset.isDecisionTable && currentDecisionTable;
+  const decisionResult = isDecision ? checkDecisionTable(currentDecisionTable, testDataObj) : null;
+  const singleRuleResult = !isDecision ? checkRule(currentRule, testDataObj) : null;
 
-  const generatedCode = `import { rule, where, or, checkRule } from "@qarar/sdk";
+  const sqlResult = !isDecision ? compileToSQL(currentRule, { columnStyle: sqlStyle }) : { sql: "N/A (Decision Table)" };
+  const mongoCompiled = !isDecision ? compileToMongo(currentRule) : { filter: { note: "N/A (Decision Table)" } };
+
+  const generatedCode = isDecision
+    ? `import { switchRule, rule, where, checkDecisionTable } from "@qarar/sdk";
+
+const pricingMatrix = switchRule("${currentDecisionTable?.name}")
+  .id("${currentDecisionTable?.id}")
+  .case("vip-branch", rule().where("customer.tier").eq("vip").and("cart.total").gte(200))
+    .then({ discountPercent: 25, freeShipping: true })
+  .default(${JSON.stringify(currentDecisionTable?.defaultOutput)})
+  .build();
+
+const decision = checkDecisionTable(pricingMatrix, data);
+console.log(decision.matchedBranch?.id); // "${decisionResult?.matchedBranch?.id}"`
+    : `import { rule, where, checkRule } from "@qarar/sdk";
 
 const ${currentRule.id.replace(/[^a-zA-Z0-9]+/g, "_")} = rule("${currentRule.name}")
   .id("${currentRule.id}")
@@ -254,172 +352,312 @@ const ${currentRule.id.replace(/[^a-zA-Z0-9]+/g, "_")} = rule("${currentRule.nam
   .build();
 
 const decision = checkRule(${currentRule.id.replace(/[^a-zA-Z0-9]+/g, "_")}, data);
-console.log(decision.result); // ${checkResult.result}`;
+console.log(decision.result); // ${singleRuleResult?.result}`;
 
   return (
     <div
+      className="not-content"
       style={{
         borderRadius: "16px",
-        border: "1px solid #334155",
-        backgroundColor: "#020617",
-        color: "#f8fafc",
-        padding: "24px",
-        boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+        border: `1px solid ${t.border}`,
+        backgroundColor: t.bg,
+        color: t.text,
+        padding: "20px",
+        boxShadow: t.shadow,
         fontFamily: "system-ui, -apple-system, sans-serif",
+        transition: "background-color 0.2s ease, border-color 0.2s ease",
       }}
     >
-      {/* Header */}
-      <div style={{ marginBottom: "20px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
-          <div>
-            <h3 style={{ margin: 0, color: "#60a5fa", fontSize: "1.4rem", fontWeight: 800 }}>
-              ⚡ Qarar Interactive Rule Studio & Playground
-            </h3>
-            <p style={{ margin: "4px 0 0 0", color: "#94a3b8", fontSize: "0.9rem" }}>
-              Build rules visually or via JSON, test live data payloads, and generate production SQL & MongoDB queries.
-            </p>
-          </div>
-          <span
-            style={{
-              backgroundColor: "#1e293b",
-              color: "#38bdf8",
-              border: "1px solid #334155",
-              padding: "4px 12px",
-              borderRadius: "9999px",
-              fontSize: "0.8rem",
-              fontWeight: 600,
-            }}
-          >
-            v0.0.4 SDK Live
-          </span>
-        </div>
-
-        <div style={{ backgroundColor: "#1e1b4b", border: "1px solid #6366f1", borderRadius: "8px", padding: "10px 14px", marginTop: "12px", fontSize: "0.85rem", color: "#e0e7ff" }}>
-          💡 <strong>Zero-Deploy Dynamic Logic:</strong> Save this JSON AST in PostgreSQL, MongoDB, or Redis. Update rules live in your database without editing code or redeploying servers!
-        </div>
-
-        {/* Presets Grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px", marginTop: "16px" }}>
-          {PRESETS.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => loadPreset(p)}
+      {/* Sleek Preset Template Toolbar */}
+      <div
+        style={{
+          marginBottom: "16px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "12px",
+            marginTop: "16px",
+            padding: "12px 16px",
+            backgroundColor: t.subcardBg,
+            border: `1px solid ${t.border}`,
+            borderRadius: "10px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "0.82rem", fontWeight: 700, color: t.textMuted }}>
+              Rule Template:
+            </span>
+            <select
+              value={activePreset.id}
+              onChange={(e) => {
+                const found = PRESETS.find((p) => p.id === e.target.value);
+                if (found) loadPreset(found);
+              }}
               style={{
-                textAlign: "left",
-                padding: "10px 14px",
-                borderRadius: "10px",
-                border: "1px solid",
-                borderColor: activePreset.id === p.id ? "#3b82f6" : "#1e293b",
-                backgroundColor: activePreset.id === p.id ? "#1e3a8a" : "#0f172a",
-                color: activePreset.id === p.id ? "#ffffff" : "#cbd5e1",
+                height: "36px",
+                padding: "0 12px",
+                borderRadius: "6px",
+                border: `1px solid ${t.inputBorder}`,
+                backgroundColor: t.inputBg,
+                color: t.text,
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                outline: "none",
                 cursor: "pointer",
-                transition: "all 0.2s ease",
+                minWidth: "260px",
               }}
             >
-              <div style={{ fontWeight: "bold", fontSize: "0.85rem", color: activePreset.id === p.id ? "#93c5fd" : "#f1f5f9" }}>
-                {p.title}
-              </div>
-              <div style={{ fontSize: "0.75rem", color: "#94a3b8", marginTop: "4px", lineHeight: "1.2" }}>
-                {p.description}
-              </div>
+              {PRESETS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title}
+                </option>
+              ))}
+            </select>
+            <span
+              style={{
+                fontSize: "0.78rem",
+                color: t.textMuted,
+                maxWidth: "380px",
+                lineHeight: "1.3",
+              }}
+            >
+              {activePreset.description}
+            </span>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <button
+              type="button"
+              onClick={() => {
+                const blankRule: Rule = {
+                  id: "custom-rule-v1",
+                  name: "New Custom Rule",
+                  version: "1",
+                  root: {
+                    type: "eq",
+                    left: { type: "field", path: "user.role" },
+                    right: { type: "string", value: "admin" },
+                  },
+                };
+                setCurrentRule(blankRule);
+                setJsonText(JSON.stringify(blankRule, null, 2));
+                setEditorTab("visual");
+              }}
+              style={{
+                fontSize: "0.78rem",
+                fontWeight: 600,
+                color: isDark ? "#94a3b8" : "#475569",
+                backgroundColor: "transparent",
+                border: `1px solid ${t.borderSubtle}`,
+                borderRadius: "6px",
+                padding: "6px 12px",
+                cursor: "pointer",
+              }}
+            >
+              + New Blank Rule
             </button>
-          ))}
+            <a
+              href="/recipes/ecommerce-discounts/"
+              style={{
+                fontSize: "0.78rem",
+                fontWeight: 600,
+                color: t.primary,
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+              }}
+            >
+              📖 View Recipes in Docs →
+            </a>
+          </div>
         </div>
       </div>
 
-      {/* Main Studio Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "20px" }}>
-        {/* Left Section: Editors */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {/* Tabs Navigation */}
-          <div style={{ display: "flex", borderBottom: "1px solid #334155", backgroundColor: "#0f172a", borderRadius: "8px 8px 0 0", padding: "4px 8px 0 8px" }}>
-            <button
-              type="button"
-              onClick={() => setEditorTab("visual")}
-              style={{
-                padding: "8px 16px",
-                borderBottom: editorTab === "visual" ? "3px solid #3b82f6" : "none",
-                color: editorTab === "visual" ? "#60a5fa" : "#94a3b8",
-                backgroundColor: "transparent",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 700,
-                fontSize: "0.85rem",
-              }}
-            >
-              🎨 Visual Builder
-            </button>
+      {/* Main Studio Dual Pane */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "22px" }}>
+        
+        {/* Left Pane: Editor */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          
+          {/* Editor Tabs Navigation */}
+          <div style={{ display: "flex", borderBottom: `1px solid ${t.border}`, backgroundColor: t.subcardBg, borderRadius: "10px 10px 0 0", padding: "4px 8px 0 8px" }}>
+            {!isDecision && (
+              <button
+                type="button"
+                onClick={() => setEditorTab("visual")}
+                style={{
+                  padding: "10px 18px",
+                  borderBottom: editorTab === "visual" ? `3px solid ${t.primary}` : "3px solid transparent",
+                  color: editorTab === "visual" ? t.primary : t.textMuted,
+                  backgroundColor: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                  fontSize: "0.88rem",
+                }}
+              >
+                🎨 Visual Builder
+              </button>
+            )}
+
+            {isDecision && (
+              <button
+                type="button"
+                onClick={() => setEditorTab("matrix")}
+                style={{
+                  padding: "10px 18px",
+                  borderBottom: editorTab === "matrix" ? `3px solid ${t.accent}` : "3px solid transparent",
+                  color: editorTab === "matrix" ? t.accent : t.textMuted,
+                  backgroundColor: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                  fontSize: "0.88rem",
+                }}
+              >
+                🔀 Decision Matrix View
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => setEditorTab("json")}
               style={{
-                padding: "8px 16px",
-                borderBottom: editorTab === "json" ? "3px solid #3b82f6" : "none",
-                color: editorTab === "json" ? "#60a5fa" : "#94a3b8",
+                padding: "10px 18px",
+                borderBottom: editorTab === "json" ? `3px solid ${t.primary}` : "3px solid transparent",
+                color: editorTab === "json" ? t.primary : t.textMuted,
                 backgroundColor: "transparent",
                 border: "none",
                 cursor: "pointer",
                 fontWeight: 700,
-                fontSize: "0.85rem",
+                fontSize: "0.88rem",
               }}
             >
-              📄 JSON AST
+              📄 JSON AST Editor
             </button>
+
             <button
               type="button"
               onClick={() => setEditorTab("ts")}
               style={{
-                padding: "8px 16px",
-                borderBottom: editorTab === "ts" ? "3px solid #3b82f6" : "none",
-                color: editorTab === "ts" ? "#60a5fa" : "#94a3b8",
+                padding: "10px 18px",
+                borderBottom: editorTab === "ts" ? `3px solid ${t.primary}` : "3px solid transparent",
+                color: editorTab === "ts" ? t.primary : t.textMuted,
                 backgroundColor: "transparent",
                 border: "none",
                 cursor: "pointer",
                 fontWeight: 700,
-                fontSize: "0.85rem",
+                fontSize: "0.88rem",
               }}
             >
               ⚡ TypeScript Code
             </button>
           </div>
 
-          {/* Active Tab View */}
-          {editorTab === "visual" && (
-            <div style={{ borderRadius: "8px", border: "1px solid #334155", backgroundColor: "#0f172a", padding: "12px" }}>
+          {/* Active Tab Views */}
+          {editorTab === "visual" && !isDecision && (
+            <div>
               <RuleBuilder
                 value={currentRule}
                 onChange={handleRuleNodeChange}
                 fields={activePreset.fields}
+                theme={t}
               />
+            </div>
+          )}
+
+          {editorTab === "matrix" && isDecision && currentDecisionTable && (
+            <div style={{ backgroundColor: t.subcardBg, border: `1px solid ${t.border}`, borderRadius: "10px", padding: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+                <h4 style={{ margin: 0, color: t.accent, fontSize: "1rem", fontWeight: 800 }}>
+                  🔀 Decision Table Matrix: {currentDecisionTable.name}
+                </h4>
+                <span style={{ fontSize: "0.75rem", backgroundColor: t.accentSubtle, color: t.accent, padding: "2px 8px", borderRadius: "4px", fontWeight: 600 }}>
+                  Mode: {currentDecisionTable.mode ?? "first"} match wins
+                </span>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {currentDecisionTable.branches.map((b, i) => {
+                  const isMatchedBranch = decisionResult?.matchedBranch?.id === b.id;
+                  return (
+                    <div
+                      key={b.id}
+                      style={{
+                        padding: "12px",
+                        borderRadius: "8px",
+                        border: "1px solid",
+                        borderColor: isMatchedBranch ? t.passBorder : t.border,
+                        backgroundColor: isMatchedBranch ? t.passBg : t.cardBg,
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                        <span style={{ fontWeight: 800, color: isMatchedBranch ? t.pass : t.text, fontSize: "0.88rem" }}>
+                          Case {i + 1}: {b.name ?? b.id}
+                        </span>
+                        {isMatchedBranch ? (
+                          <span style={{ backgroundColor: t.pass, color: "#ffffff", padding: "2px 8px", borderRadius: "4px", fontSize: "0.72rem", fontWeight: 800 }}>
+                            MATCHED BRANCH ✅
+                          </span>
+                        ) : (
+                          <span style={{ color: t.textMuted, fontSize: "0.72rem" }}>Skipped</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: "0.8rem", color: t.textMuted, marginTop: "4px" }}>
+                        Output Payload: <code style={{ color: t.codeText }}>{JSON.stringify(b.output)}</code>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <div style={{ padding: "10px 12px", borderRadius: "8px", border: `1px dashed ${t.borderSubtle}`, backgroundColor: t.cardBg, fontSize: "0.8rem", color: t.textMuted }}>
+                  ⚪ Default Fallback Output: <code style={{ color: t.codeTs }}>{JSON.stringify(currentDecisionTable.defaultOutput)}</code>
+                </div>
+              </div>
             </div>
           )}
 
           {editorTab === "json" && (
             <div>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "4px" }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "6px" }}>
                 <button
                   type="button"
                   onClick={() => copyToClipboard(jsonText, "json")}
-                  style={{ fontSize: "0.75rem", backgroundColor: "#1e293b", color: "#cbd5e1", border: "1px solid #334155", padding: "2px 8px", borderRadius: "4px", cursor: "pointer" }}
+                  style={{
+                    fontSize: "0.75rem",
+                    backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
+                    color: t.text,
+                    border: `1px solid ${t.borderSubtle}`,
+                    padding: "4px 10px",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                  }}
                 >
-                  {copied === "json" ? "Copied! ✓" : "Copy JSON"}
+                  {copied === "json" ? "Copied! ✓" : "Copy JSON AST"}
                 </button>
               </div>
               <textarea
-                rows={16}
+                rows={18}
                 value={jsonText}
                 onChange={(e) => handleJsonTextChange(e.target.value)}
                 style={{
                   width: "100%",
-                  backgroundColor: "#090d16",
-                  color: "#38bdf8",
+                  backgroundColor: t.codeBg,
+                  color: t.codeText,
                   fontFamily: "monospace",
                   fontSize: "0.85rem",
-                  padding: "12px",
-                  borderRadius: "8px",
-                  border: "1px solid #334155",
+                  padding: "14px",
+                  borderRadius: "10px",
+                  border: `1px solid ${t.border}`,
                   boxSizing: "border-box",
+                  outline: "none",
+                  lineHeight: "1.4",
                 }}
               />
             </div>
@@ -427,28 +665,37 @@ console.log(decision.result); // ${checkResult.result}`;
 
           {editorTab === "ts" && (
             <div>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "4px" }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "6px" }}>
                 <button
                   type="button"
                   onClick={() => copyToClipboard(generatedCode, "ts")}
-                  style={{ fontSize: "0.75rem", backgroundColor: "#1e293b", color: "#cbd5e1", border: "1px solid #334155", padding: "2px 8px", borderRadius: "4px", cursor: "pointer" }}
+                  style={{
+                    fontSize: "0.75rem",
+                    backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
+                    color: t.text,
+                    border: `1px solid ${t.borderSubtle}`,
+                    padding: "4px 10px",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                  }}
                 >
-                  {copied === "ts" ? "Copied! ✓" : "Copy Code"}
+                  {copied === "ts" ? "Copied! ✓" : "Copy TypeScript Code"}
                 </button>
               </div>
               <pre
                 style={{
                   width: "100%",
-                  backgroundColor: "#090d16",
-                  color: "#a7f3d0",
+                  backgroundColor: t.codeBg,
+                  color: t.codeTs,
                   fontFamily: "monospace",
                   fontSize: "0.85rem",
-                  padding: "12px",
-                  borderRadius: "8px",
-                  border: "1px solid #334155",
+                  padding: "14px",
+                  borderRadius: "10px",
+                  border: `1px solid ${t.border}`,
                   overflowX: "auto",
                   whiteSpace: "pre-wrap",
                   boxSizing: "border-box",
+                  lineHeight: "1.4",
                 }}
               >
                 {generatedCode}
@@ -456,159 +703,252 @@ console.log(decision.result); // ${checkResult.result}`;
             </div>
           )}
 
-          {/* Database Target Query Generator */}
-          <div style={{ marginTop: "12px", backgroundColor: "#0f172a", border: "1px solid #334155", borderRadius: "10px", padding: "14px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-              <h4 style={{ margin: 0, color: "#e2e8f0", fontSize: "0.95rem", fontWeight: 700 }}>
-                🗄️ Database Query Pushdown (Live)
-              </h4>
-              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                <span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>SQL Style:</span>
-                {(["snake", "quote", "path"] as const).map((style) => (
-                  <button
-                    key={style}
-                    type="button"
-                    onClick={() => setSqlStyle(style)}
+          {/* Database Target Query Generator (Single Rules Only) */}
+          {!isDecision && (
+            <div style={{ backgroundColor: t.subcardBg, border: `1px solid ${t.border}`, borderRadius: "12px", padding: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
+                <h4 style={{ margin: 0, color: t.text, fontSize: "0.95rem", fontWeight: 700 }}>
+                  🗄️ Database Query Pushdown (Live Compiler)
+                </h4>
+                <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                  <span style={{ fontSize: "0.75rem", color: t.textMuted }}>Column Style:</span>
+                  {(["snake", "quote", "path"] as const).map((style) => (
+                    <button
+                      key={style}
+                      type="button"
+                      onClick={() => setSqlStyle(style)}
+                      style={{
+                        fontSize: "0.72rem",
+                        padding: "3px 8px",
+                        borderRadius: "4px",
+                        border: "1px solid",
+                        borderColor: sqlStyle === style ? t.primary : t.borderSubtle,
+                        backgroundColor: sqlStyle === style ? t.primaryHover : "transparent",
+                        color: sqlStyle === style ? "#ffffff" : t.textMuted,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {style}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "0.82rem", fontFamily: "monospace" }}>
+                <div style={{ backgroundColor: t.cardBg, padding: "12px", borderRadius: "8px", border: `1px solid ${t.border}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", color: t.accent, fontWeight: "bold", marginBottom: "6px" }}>
+                    <span>SQL WHERE Clause (~1.6M ops/sec)</span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(sqlResult.sql, "sql")}
+                      style={{ fontSize: "0.72rem", color: t.textMuted, border: "none", backgroundColor: "transparent", cursor: "pointer" }}
+                    >
+                      {copied === "sql" ? "Copied!" : "Copy SQL"}
+                    </button>
+                  </div>
+                  <div
                     style={{
-                      fontSize: "0.7rem",
-                      padding: "2px 6px",
-                      borderRadius: "4px",
-                      border: "1px solid",
-                      borderColor: sqlStyle === style ? "#3b82f6" : "#334155",
-                      backgroundColor: sqlStyle === style ? "#1e40af" : "transparent",
-                      color: sqlStyle === style ? "#ffffff" : "#94a3b8",
-                      cursor: "pointer",
+                      backgroundColor: t.codeBg,
+                      color: t.codeText,
+                      border: `1px solid ${t.border}`,
+                      padding: "10px 14px",
+                      borderRadius: "6px",
+                      fontFamily: "monospace",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-all",
+                      fontSize: "0.85rem",
+                      lineHeight: "1.4",
                     }}
                   >
-                    {style}
-                  </button>
-                ))}
+                    {sqlResult.sql || "Invalid SQL"}
+                  </div>
+                </div>
+
+                <div style={{ backgroundColor: t.cardBg, padding: "12px", borderRadius: "8px", border: `1px solid ${t.border}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", color: t.primary, fontWeight: "bold", marginBottom: "6px" }}>
+                    <span>MongoDB Filter Object (~13.7M ops/sec)</span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(JSON.stringify(mongoCompiled.filter), "mongo")}
+                      style={{ fontSize: "0.72rem", color: t.textMuted, border: "none", backgroundColor: "transparent", cursor: "pointer" }}
+                    >
+                      {copied === "mongo" ? "Copied!" : "Copy Mongo"}
+                    </button>
+                  </div>
+                  <pre
+                    style={{
+                      margin: 0,
+                      backgroundColor: t.codeBg,
+                      color: t.codeText,
+                      border: `1px solid ${t.border}`,
+                      padding: "10px 14px",
+                      borderRadius: "6px",
+                      whiteSpace: "pre-wrap",
+                      lineHeight: "1.3",
+                    }}
+                  >
+                    {JSON.stringify(mongoCompiled.filter, null, 2)}
+                  </pre>
+                </div>
               </div>
             </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "0.8rem", fontFamily: "monospace" }}>
-              <div style={{ backgroundColor: "#020617", padding: "10px", borderRadius: "6px", border: "1px solid #1e293b" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", color: "#a855f7", fontWeight: "bold", marginBottom: "4px" }}>
-                  <span>SQL WHERE Clause</span>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(sqlResult.sql, "sql")}
-                    style={{ fontSize: "0.7rem", color: "#94a3b8", border: "none", backgroundColor: "transparent", cursor: "pointer" }}
-                  >
-                    {copied === "sql" ? "Copied!" : "Copy"}
-                  </button>
-                </div>
-                <code style={{ color: "#e2e8f0", wordBreak: "break-all" }}>
-                  {sqlResult.sql || "Invalid SQL"}
-                </code>
-              </div>
-
-              <div style={{ backgroundColor: "#020617", padding: "10px", borderRadius: "6px", border: "1px solid #1e293b" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", color: "#38bdf8", fontWeight: "bold", marginBottom: "4px" }}>
-                  <span>MongoDB Filter</span>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(JSON.stringify(mongoCompiled.filter), "mongo")}
-                    style={{ fontSize: "0.7rem", color: "#94a3b8", border: "none", backgroundColor: "transparent", cursor: "pointer" }}
-                  >
-                    {copied === "mongo" ? "Copied!" : "Copy"}
-                  </button>
-                </div>
-                <pre style={{ margin: 0, color: "#e2e8f0", whiteSpace: "pre-wrap" }}>
-                  {JSON.stringify(mongoCompiled.filter, null, 2)}
-                </pre>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
 
-        {/* Right Section: Test Input Data & Evaluation Results */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+        {/* Right Pane: Test Data Payload & Live Decision Outcome */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          
           {/* Data Payload Input */}
-          <div style={{ backgroundColor: "#0f172a", border: "1px solid #334155", borderRadius: "10px", padding: "14px" }}>
-            <h4 style={{ margin: "0 0 8px 0", color: "#e2e8f0", fontSize: "0.95rem", fontWeight: 700 }}>
-              📥 Mock Input Payload (JSON Data)
-            </h4>
+          <div style={{ backgroundColor: t.subcardBg, border: `1px solid ${t.border}`, borderRadius: "12px", padding: "16px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+              <h4 style={{ margin: 0, color: t.text, fontSize: "0.95rem", fontWeight: 700 }}>
+                📥 Mock Input Payload (JSON Data)
+              </h4>
+              <button
+                type="button"
+                onClick={() => setDataInput(JSON.stringify(activePreset.sampleData, null, 2))}
+                style={{ fontSize: "0.72rem", color: t.primary, backgroundColor: "transparent", border: "none", cursor: "pointer", textDecoration: "underline" }}
+              >
+                Reset Sample Data
+              </button>
+            </div>
             <textarea
               rows={8}
               value={dataInput}
               onChange={(e) => setDataInput(e.target.value)}
               style={{
                 width: "100%",
-                backgroundColor: "#020617",
-                color: "#4ade80",
+                backgroundColor: t.inputBg,
+                color: t.inputDataColor,
                 fontFamily: "monospace",
                 fontSize: "0.85rem",
-                padding: "10px",
-                borderRadius: "6px",
-                border: "1px solid #334155",
+                padding: "12px",
+                borderRadius: "8px",
+                border: `1px solid ${t.inputBorder}`,
                 boxSizing: "border-box",
+                outline: "none",
+                lineHeight: "1.4",
               }}
             />
             {jsonError && (
-              <span style={{ color: "#ef4444", fontSize: "0.75rem", display: "block", marginTop: "4px" }}>
-                Syntax Error: Invalid JSON input format
+              <span style={{ color: t.fail, fontSize: "0.75rem", display: "block", marginTop: "6px", fontWeight: 600 }}>
+                ⚠️ Syntax Error: Invalid JSON format
               </span>
             )}
           </div>
 
-          {/* Decision Status Badge */}
-          <div
-            style={{
-              backgroundColor: checkResult.result ? "#064e3b" : "#450a0a",
-              border: `1.5px solid ${checkResult.result ? "#059669" : "#dc2626"}`,
-              borderRadius: "10px",
-              padding: "16px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontWeight: 800, fontSize: "1.1rem" }}>
-                Rule Decision Outcome:
-              </span>
-              <span
-                style={{
-                  backgroundColor: checkResult.result ? "#10b981" : "#ef4444",
-                  color: "#ffffff",
-                  padding: "6px 16px",
-                  borderRadius: "9999px",
-                  fontWeight: 800,
-                  fontSize: "0.9rem",
-                  letterSpacing: "0.05em",
-                  boxShadow: checkResult.result ? "0 0 10px rgba(16, 185, 129, 0.4)" : "0 0 10px rgba(239, 68, 68, 0.4)",
-                }}
-              >
-                {checkResult.result ? "PASS ✅" : "FAIL ❌"}
-              </span>
-            </div>
+          {/* Decision Outcome Status Banner */}
+          {isDecision && decisionResult && (
+            <div
+              style={{
+                backgroundColor: decisionResult.matched ? t.passBg : t.failBg,
+                border: `1.5px solid ${decisionResult.matched ? t.passBorder : t.failBorder}`,
+                borderRadius: "12px",
+                padding: "18px",
+                boxShadow: decisionResult.matched ? "0 0 20px rgba(16, 185, 129, 0.2)" : "0 0 20px rgba(239, 68, 68, 0.2)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <span style={{ fontWeight: 800, fontSize: "1.05rem", color: decisionResult.matched ? (isDark ? t.text : t.pass) : (isDark ? t.text : t.fail) }}>
+                    Decision Table Match:
+                  </span>
+                  <div style={{ fontSize: "0.8rem", color: t.textMuted, marginTop: "2px" }}>
+                    Matched Branch: <strong style={{ color: decisionResult.matched ? t.pass : t.warn }}>{decisionResult.matchedBranch?.name ?? decisionResult.matchedBranch?.id ?? "Default Fallback"}</strong>
+                  </div>
+                </div>
+                <span
+                  style={{
+                    backgroundColor: decisionResult.matched ? t.pass : t.warn,
+                    color: "#ffffff",
+                    padding: "6px 16px",
+                    borderRadius: "9999px",
+                    fontWeight: 800,
+                    fontSize: "0.88rem",
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  {decisionResult.matched ? "MATCHED ✅" : "DEFAULT FALLBACK ⚪"}
+                </span>
+              </div>
 
-            {/* Failure Reasons */}
-            <div style={{ marginTop: "12px", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "10px" }}>
-              <strong style={{ fontSize: "0.85rem", color: checkResult.result ? "#a7f3d0" : "#fca5a5" }}>
-                Human Explanation / Audit Trail:
-              </strong>
-              {checkResult.reasons.length === 0 ? (
-                <p style={{ margin: "4px 0 0 0", fontSize: "0.85rem", color: "#a7f3d0" }}>
-                  All rule conditions were satisfied successfully!
-                </p>
-              ) : (
-                <ul style={{ margin: "6px 0 0 0", paddingLeft: "18px", fontSize: "0.85rem", color: "#fca5a5", lineHeight: "1.4" }}>
-                  {checkResult.reasons.map((r, i) => (
-                    <li key={i}>{r}</li>
-                  ))}
-                </ul>
-              )}
+              <div style={{ marginTop: "12px", borderTop: "1px solid rgba(0,0,0,0.1)", paddingTop: "12px" }}>
+                <strong style={{ fontSize: "0.85rem", color: decisionResult.matched ? t.pass : t.warn }}>
+                  Selected Output Config:
+                </strong>
+                <pre style={{ margin: "6px 0 0 0", fontSize: "0.82rem", color: t.codeText, backgroundColor: t.codeBg, border: `1px solid ${t.border}`, padding: "10px", borderRadius: "6px" }}>
+                  {JSON.stringify(decisionResult.output, null, 2)}
+                </pre>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Interactive Trace Tree Visualizer */}
-          <div style={{ backgroundColor: "#0f172a", border: "1px solid #334155", borderRadius: "10px", padding: "14px" }}>
-            <h4 style={{ margin: "0 0 8px 0", color: "#e2e8f0", fontSize: "0.95rem", fontWeight: 700 }}>
-              🌳 Execution Trace Tree
-            </h4>
-            <div style={{ fontSize: "0.8rem", fontFamily: "monospace", overflowX: "auto" }}>
-              <TraceNodeView entry={checkResult.trace} depth={0} />
+          {!isDecision && singleRuleResult && (
+            <div
+              style={{
+                backgroundColor: singleRuleResult.result ? t.passBg : t.failBg,
+                border: `1.5px solid ${singleRuleResult.result ? t.passBorder : t.failBorder}`,
+                borderRadius: "12px",
+                padding: "18px",
+                boxShadow: singleRuleResult.result ? "0 0 20px rgba(16, 185, 129, 0.2)" : "0 0 20px rgba(239, 68, 68, 0.2)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <span style={{ fontWeight: 800, fontSize: "1.05rem", color: singleRuleResult.result ? (isDark ? t.text : t.pass) : (isDark ? t.text : t.fail) }}>
+                    Rule Evaluation Outcome:
+                  </span>
+                  <div style={{ fontSize: "0.78rem", color: t.textMuted, marginTop: "2px" }}>
+                    Latency: ~0.0002 ms (~4.4M evals/sec)
+                  </div>
+                </div>
+                <span
+                  style={{
+                    backgroundColor: singleRuleResult.result ? t.pass : t.fail,
+                    color: "#ffffff",
+                    padding: "6px 16px",
+                    borderRadius: "9999px",
+                    fontWeight: 800,
+                    fontSize: "0.88rem",
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  {singleRuleResult.result ? "PASS ✅" : "FAIL ❌"}
+                </span>
+              </div>
+
+              {/* Failure Reasons */}
+              <div style={{ marginTop: "12px", borderTop: "1px solid rgba(0,0,0,0.1)", paddingTop: "12px" }}>
+                <strong style={{ fontSize: "0.85rem", color: singleRuleResult.result ? t.pass : t.fail }}>
+                  Human Audit Explanation (explainFailures):
+                </strong>
+                {singleRuleResult.reasons.length === 0 ? (
+                  <p style={{ margin: "6px 0 0 0", fontSize: "0.85rem", color: t.pass }}>
+                    All rule conditions were satisfied successfully!
+                  </p>
+                ) : (
+                  <ul style={{ margin: "6px 0 0 0", paddingLeft: "18px", fontSize: "0.85rem", color: t.fail, lineHeight: "1.5" }}>
+                    {singleRuleResult.reasons.map((r, i) => (
+                      <li key={i}>{r}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Execution Trace Visualizer */}
+          {!isDecision && singleRuleResult && (
+            <div style={{ backgroundColor: t.subcardBg, border: `1px solid ${t.border}`, borderRadius: "12px", padding: "16px" }}>
+              <h4 style={{ margin: "0 0 10px 0", color: t.text, fontSize: "0.95rem", fontWeight: 700 }}>
+                🌳 Execution Trace Tree Visualizer
+              </h4>
+              <div style={{ fontSize: "0.82rem", fontFamily: "monospace", overflowX: "auto" }}>
+                <TraceNodeView entry={singleRuleResult.trace} depth={0} theme={t} />
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
     </div>
@@ -619,21 +959,21 @@ console.log(decision.result); // ${checkResult.result}`;
 // Trace Tree Component
 // ---------------------------------------------------------------------------
 
-function TraceNodeView({ entry, depth }: { entry: TraceEntry; depth: number }) {
+function TraceNodeView({ entry, depth, theme }: { entry: TraceEntry; depth: number; theme: QararTheme }) {
   if (entry.type === "logical") {
     return (
-      <div style={{ marginLeft: `${depth * 12}px`, borderLeft: "2px solid #334155", paddingLeft: "8px", margin: "4px 0" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <span style={{ color: entry.passed ? "#10b981" : "#ef4444", fontWeight: "bold" }}>
+      <div style={{ marginLeft: `${depth * 14}px`, borderLeft: `2px solid ${theme.borderSubtle}`, paddingLeft: "10px", margin: "6px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <span style={{ color: entry.passed ? theme.pass : theme.fail, fontWeight: "bold", fontSize: "0.9rem" }}>
             {entry.passed ? "✓" : "✗"}
           </span>
-          <span style={{ fontWeight: "bold", color: "#60a5fa", textTransform: "uppercase" }}>
-            {entry.operator}
+          <span style={{ fontWeight: 800, color: entry.operator === "or" ? theme.accent : theme.primary, textTransform: "uppercase" }}>
+            {entry.operator} GATE
           </span>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginTop: "4px" }}>
           {entry.children.map((child, i) => (
-            <TraceNodeView key={i} entry={child} depth={depth + 1} />
+            <TraceNodeView key={i} entry={child} depth={depth + 1} theme={theme} />
           ))}
         </div>
       </div>
@@ -642,19 +982,19 @@ function TraceNodeView({ entry, depth }: { entry: TraceEntry; depth: number }) {
 
   if (entry.type === "between") {
     return (
-      <div style={{ marginLeft: `${depth * 12}px`, color: entry.passed ? "#86efac" : "#fca5a5", margin: "2px 0" }}>
+      <div style={{ marginLeft: `${depth * 14}px`, color: entry.passed ? theme.pass : theme.fail, margin: "4px 0" }}>
         <span>{entry.passed ? "✓" : "✗"} </span>
-        <span style={{ color: "#93c5fd" }}>{entry.field}</span> between [{String(entry.min)}, {String(entry.max)}]
-        <span style={{ color: "#94a3b8" }}> (actual: {JSON.stringify(entry.actual)})</span>
+        <span style={{ color: theme.primaryLight }}>{entry.field}</span> between [{String(entry.min)}, {String(entry.max)}]
+        <span style={{ color: theme.textMuted }}> (actual: {JSON.stringify(entry.actual)})</span>
       </div>
     );
   }
 
   return (
-    <div style={{ marginLeft: `${depth * 12}px`, color: entry.passed ? "#86efac" : "#fca5a5", margin: "2px 0" }}>
+    <div style={{ marginLeft: `${depth * 14}px`, color: entry.passed ? theme.pass : theme.fail, margin: "4px 0" }}>
       <span>{entry.passed ? "✓" : "✗"} </span>
-      <span style={{ color: "#93c5fd" }}>{entry.field}</span> {entry.operator} {JSON.stringify(entry.expected)}
-      <span style={{ color: "#94a3b8" }}> (actual: {JSON.stringify(entry.actual)})</span>
+      <span style={{ color: theme.primaryLight }}>{entry.field}</span> {entry.operator} {JSON.stringify(entry.expected)}
+      <span style={{ color: theme.textMuted }}> (actual: {JSON.stringify(entry.actual)})</span>
     </div>
   );
 }

@@ -1,0 +1,81 @@
+---
+title: E-Commerce Promotional Discounts Recipe
+description: Build dynamic cart discount rules, explain checkout eligibility in user banners, and push rules to SQL for email marketing blasts.
+---
+
+import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+E-commerce promotional rules change frequently during sales campaigns, Black Friday events, and seasonal clearances.
+
+This recipe demonstrates how to define a multi-condition promotional discount rule, evaluate checkout carts, return user-friendly failure explanations, and push the rule to SQL to query eligible customers for email campaigns.
+
+---
+
+## 1. Defining the Discount Rule
+
+A promotional rule requiring:
+- Customer age $\ge 18$
+- Customer loyalty tier is `"vip"` or `"platinum"`
+- Cart subtotal $\ge \$100$
+- At least 2 items in cart
+
+```ts
+import { rule, checkRule, compileToSQL } from "@qarar/sdk";
+
+export const vipHolidayPromo = rule("VIP Holiday Promotion")
+  .id("promo_holiday_vip_2026")
+  .where("customer.age").gte(18)
+  .and("customer.tier").in(["vip", "platinum"])
+  .and("cart.subtotal").gte(100)
+  .and("cart.itemCount").gte(2)
+  .build();
+```
+
+---
+
+## 2. In-Memory Checkout Validation
+
+When a user views their shopping bag or proceeds to checkout, evaluate their session:
+
+```ts
+const cartSession = {
+  customer: { age: 24, tier: "silver" },
+  cart: { subtotal: 149.99, itemCount: 3 },
+};
+
+const check = checkRule(vipHolidayPromo, cartSession);
+
+if (check.result) {
+  // Apply 20% discount
+  console.log("Applied discount: $", (cartSession.cart.subtotal * 0.2).toFixed(2));
+} else {
+  // Show user why discount did not apply
+  console.log("Promo not applied:", check.reasons);
+  // ➔ ['customer.tier: "silver" is not in [vip, platinum]']
+}
+```
+
+---
+
+## 3. Database Pushdown for Marketing Campaigns
+
+To send targeted promotional emails to all qualifying customers in your database, don't fetch all customers into Node.js memory. Compile the rule directly to a SQL `WHERE` clause:
+
+```ts
+const { sql } = compileToSQL(vipHolidayPromo, { columnStyle: "snake" });
+
+console.log(sql);
+/*
+➔ customer_age >= 18 
+  AND customer_tier IN ('vip', 'platinum') 
+  AND cart_subtotal >= 100 
+  AND cart_item_count >= 2
+*/
+
+// Execute query with PostgreSQL / MySQL
+const recipients = await db.query(
+  `SELECT id, email, first_name FROM customers WHERE ${sql}`
+);
+
+console.log(`Found ${recipients.rowCount} eligible customers for marketing blast.`);
+```

@@ -2,12 +2,17 @@
   "name": "@qarar/benchmark",
   "version": "0.0.4",
   "description": "High-throughput performance benchmarking and large dataset stress testing suite for Qarar",
-  "private": true,
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
     "qarar-bench": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

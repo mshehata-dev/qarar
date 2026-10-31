@@ -51,6 +51,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsc -p tsconfig.json --watch",
     "test": "vitest run",
+    "lint": "biome lint .",
     "prepublishOnly": "pnpm run build && pnpm run test"
   },
   "publishConfig": {

@@ -21,6 +21,7 @@
     "bench:micro": "node dist/cli.js --suite micro",
     "bench:decision": "node dist/cli.js --suite decision",
     "test": "vitest run",
+    "lint": "biome lint .",
     "prebench": "pnpm run build"
   },
   "dependencies": {

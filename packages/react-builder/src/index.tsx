@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import type { RuleNode } from "@qarar/spec";
 import { getThemeTokens, type QararTheme } from "@qarar/theme";
 import {
@@ -54,8 +54,13 @@ export function RuleBuilder({
 }: RuleBuilderProps) {
   const rootAST = "root" in value ? value.root : value;
   const [tree, setTree] = useState<BuilderNode>(() => fromAST(rootAST));
+  const isInternal = useRef(false);
 
   useEffect(() => {
+    if (isInternal.current) {
+      isInternal.current = false;
+      return;
+    }
     setTree(fromAST(rootAST));
   }, [JSON.stringify(rootAST)]);
 
@@ -65,6 +70,7 @@ export function RuleBuilder({
   }, {});
 
   function updateTree(newTree: BuilderNode) {
+    isInternal.current = true;
     setTree(newTree);
     const updatedAST = toAST(newTree, fieldTypeMap);
     onChange(updatedAST);

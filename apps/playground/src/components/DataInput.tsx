@@ -40,7 +40,9 @@ function csvToObject(csv: string): Record<string, unknown> {
   const headers = firstLine.map((h) => h.trim().replace(/"/g, ""));
   const dataRow = lines[1]?.split(",").map((v) => v.trim().replace(/"/g, "")) ?? [];
   const result: Record<string, unknown> = {};
-  headers.forEach((h, i) => setNested(result, h, parseValue(dataRow[i] ?? "")));
+  headers.forEach((h, i) => {
+    setNested(result, h, parseValue(dataRow[i] ?? ""));
+  });
   return result;
 }
 

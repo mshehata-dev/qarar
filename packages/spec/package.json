@@ -15,7 +15,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsc -p tsconfig.json --watch",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "biome lint ."
   },
   "dependencies": {
     "zod": "^3.24.1"

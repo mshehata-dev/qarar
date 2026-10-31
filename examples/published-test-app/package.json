@@ -4,10 +4,11 @@
   "version": "0.0.4",
   "type": "module",
   "scripts": {
-    "start": "node index.mjs"
+    "start": "node index.mjs",
+    "lint": "biome lint ."
   },
   "dependencies": {
-    "@qarar/sdk": "workspace:*",
+    "@qarar/sdk": "file:../../packages/sdk",
     "zod": "^3.24.1"
   }
 }

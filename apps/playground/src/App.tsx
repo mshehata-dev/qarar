@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { safeValidateRule, evaluate, explainFailures } from "@qarar/sdk";
 import type { EvaluationResult } from "@qarar/sdk";
+import type { RuleNode } from "@qarar/spec";
 import { compile as compileSql } from "@qarar/compiler-sql";
 import { compile as compileMongo } from "@qarar/compiler-mongo";
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { TraceTree } from "./components/TraceTree";
-import { LogicGroup } from "./components/LogicGroup";
 import { Accordion } from "./components/Accordion";
 import { DataInput } from "./components/DataInput";
 import { CopyButton } from "./components/CopyButton";
 import { DEFAULT_SCHEMA, OPERATOR_LABELS, inferFieldsFromData, mergeSchema } from "./schema";
 import type { FieldDef, SchemaConfig } from "./schema";
-import { defaultGroup, fromAST, toAST } from "./builderModel";
-import type { BuilderGroup } from "./builderModel";
+import { RuleBuilder, type FieldDefinition } from "@qarar/react-builder";
 import { EXAMPLES, CATEGORY_COLORS } from "./examples";
 import { qararTokens } from "@qarar/theme";
 import { cn } from "./lib/utils";
@@ -40,10 +39,12 @@ const BRAND_NAME = "Qarar";
 const THEME_STORAGE_KEY = "qarar.theme.v1";
 const VERSION_STORAGE_KEY = "qarar.version.v1";
 const VERSIONED_EXAMPLES: Record<string, typeof EXAMPLES> = {
+  "0.0.4": EXAMPLES,
+  "0.0.3": EXAMPLES,
   "0.0.2": EXAMPLES,
 };
 const AVAILABLE_VERSIONS = Object.keys(VERSIONED_EXAMPLES);
-const DEFAULT_VERSION = AVAILABLE_VERSIONS[0] ?? "0.0.2";
+const DEFAULT_VERSION = AVAILABLE_VERSIONS[0] ?? "0.0.4";
 
 type AppSection = "landing" | "install" | "docs" | "playground";
 type RuleTab = "builder" | "json";
@@ -450,15 +451,6 @@ function VersionedPlaygroundIndex() {
   return <Navigate to={`/${resolvedVersion}/playground/${getDefaultExampleId(resolvedVersion)}`} replace />;
 }
 
-function initBuilder(ex: (typeof EXAMPLES)[0]): BuilderGroup {
-  try {
-    const node = fromAST((ex.rule as { root: unknown }).root as never);
-    return node.kind === "group" ? node : defaultGroup();
-  } catch {
-    return defaultGroup();
-  }
-}
-
 function PlaygroundSection({ dark }: { dark: boolean }) {
   const navigate = useNavigate();
   const { version, exampleId } = useParams<{ version: string; exampleId: string }>();
@@ -469,8 +461,8 @@ function PlaygroundSection({ dark }: { dark: boolean }) {
   const workspaceKey = `${WORKSPACE_STATE_KEY}.${resolvedVersion}`;
 
   const [selectedId, setSelectedId] = useState(defaultExample.id);
+  const current = examples.find((e) => e.id === selectedId) ?? defaultExample;
   const [ruleTab, setRuleTab] = useState<RuleTab>("builder");
-  const [builderRoot, setBuilderRoot] = useState<BuilderGroup>(() => initBuilder(defaultExample));
   const [ruleText, setRuleText] = useState(() => JSON.stringify(defaultExample.rule, null, 2));
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [dataText, setDataText] = useState(() => JSON.stringify(defaultExample.data, null, 2));
@@ -490,7 +482,35 @@ function PlaygroundSection({ dark }: { dark: boolean }) {
     }
   });
 
-  const fieldTypeMap = useMemo(() => Object.fromEntries(schema.fields.map((f) => [f.path, f.type])), [schema]);
+  const currentRule = useMemo<RuleNode>(() => {
+    try {
+      const parsed = JSON.parse(ruleText);
+      return (parsed && typeof parsed === "object" && "root" in parsed)
+        ? (parsed.root as RuleNode)
+        : ((defaultExample.rule as { root: RuleNode }).root);
+    } catch {
+      return (defaultExample.rule as { root: RuleNode }).root;
+    }
+  }, [ruleText, defaultExample.rule]);
+
+  const handleRuleChange = useCallback((updatedRoot: RuleNode) => {
+    try {
+      const parsed = JSON.parse(ruleText) as Record<string, unknown>;
+      parsed.root = updatedRoot;
+      setRuleText(JSON.stringify(parsed, null, 2));
+    } catch {
+      setRuleText(JSON.stringify({ name: current.name, root: updatedRoot }, null, 2));
+    }
+  }, [ruleText, current.name]);
+
+  const builderFields = useMemo<FieldDefinition[]>(() => {
+    return schema.fields.map((f) => ({
+      path: f.path,
+      label: f.label,
+      type: (f.enumValues && f.enumValues.length > 0 ? "enum" : f.type) as "string" | "number" | "boolean" | "enum",
+      options: f.enumValues,
+    }));
+  }, [schema.fields]);
 
   const handleInferredFields = useCallback((fields: FieldDef[]) => {
     setSchema(mergeSchema(DEFAULT_SCHEMA, fields));
@@ -500,6 +520,20 @@ function PlaygroundSection({ dark }: { dark: boolean }) {
     (id?: string) => examples.find((e) => e.id === id)?.id ?? defaultExample.id,
     [defaultExample.id, examples]
   );
+
+  const loadExample = useCallback((id: string) => {
+    const ex = examples.find((e) => e.id === id) ?? defaultExample;
+    setSelectedId(ex.id);
+    setRuleText(JSON.stringify(ex.rule, null, 2));
+    setDataText(JSON.stringify(ex.data, null, 2));
+    setSchema(mergeSchema(DEFAULT_SCHEMA, inferFieldsFromData(ex.data)));
+    setJsonError(null);
+    setResult(null);
+    setSqlOutput(null);
+    setMongoOutput(null);
+    setFailures(null);
+    setRunError(null);
+  }, [defaultExample, examples]);
 
   useEffect(() => {
     const normalizedVersion = resolveVersion(version);
@@ -523,12 +557,6 @@ function PlaygroundSection({ dark }: { dark: boolean }) {
       setRuleText(nextRuleText);
       setDataText(nextDataText);
       try {
-        const node = fromAST((JSON.parse(nextRuleText) as { root?: unknown }).root as never);
-        setBuilderRoot(node.kind === "group" ? node : initBuilder(ex));
-      } catch {
-        setBuilderRoot(initBuilder(ex));
-      }
-      try {
         setSchema(mergeSchema(DEFAULT_SCHEMA, inferFieldsFromData(JSON.parse(nextDataText) as Record<string, unknown>)));
       } catch {
         setSchema(mergeSchema(DEFAULT_SCHEMA, inferFieldsFromData(ex.data)));
@@ -544,7 +572,7 @@ function PlaygroundSection({ dark }: { dark: boolean }) {
     if (routeId !== selectedId) {
       loadExample(routeId);
     }
-  }, [exampleId, resolveExampleId, selectedId]);
+  }, [exampleId, resolveExampleId, selectedId, loadExample]);
 
   useEffect(() => {
     try {
@@ -564,21 +592,6 @@ function PlaygroundSection({ dark }: { dark: boolean }) {
     }
   }, [outputCollapsed]);
 
-  function loadExample(id: string) {
-    const ex = examples.find((e) => e.id === id) ?? defaultExample;
-    setSelectedId(ex.id);
-    setRuleText(JSON.stringify(ex.rule, null, 2));
-    setDataText(JSON.stringify(ex.data, null, 2));
-    setBuilderRoot(initBuilder(ex));
-    setSchema(mergeSchema(DEFAULT_SCHEMA, inferFieldsFromData(ex.data)));
-    setJsonError(null);
-    setResult(null);
-    setSqlOutput(null);
-    setMongoOutput(null);
-    setFailures(null);
-    setRunError(null);
-  }
-
   function resetWorkspace() {
     try {
       localStorage.removeItem(workspaceKey);
@@ -592,15 +605,13 @@ function PlaygroundSection({ dark }: { dark: boolean }) {
 
   function switchTab(next: RuleTab) {
     setJsonError(null);
-    if (ruleTab === "builder" && next === "json") {
-      const ast = toAST(builderRoot, fieldTypeMap);
-      const obj = JSON.parse(ruleText) as Record<string, unknown>;
-      obj.root = ast;
-      setRuleText(JSON.stringify(obj, null, 2));
-    } else if (ruleTab === "json" && next === "builder") {
+    if (ruleTab === "json" && next === "builder") {
       try {
-        const node = fromAST((JSON.parse(ruleText) as { root?: unknown }).root as never);
-        setBuilderRoot(node.kind === "group" ? node : defaultGroup());
+        const parsed = JSON.parse(ruleText);
+        if (!parsed || typeof parsed !== "object" || !("root" in parsed)) {
+          setJsonError("Rule JSON must contain a 'root' node.");
+          return;
+        }
       } catch {
         setJsonError("Fix JSON errors before switching to Builder.");
         return;
@@ -609,8 +620,6 @@ function PlaygroundSection({ dark }: { dark: boolean }) {
     setRuleTab(next);
   }
 
-  const handleBuilderChange = useCallback((u: BuilderGroup) => setBuilderRoot(u), []);
-
   function run() {
     setRunError(null);
     setResult(null);
@@ -618,19 +627,10 @@ function PlaygroundSection({ dark }: { dark: boolean }) {
     setMongoOutput(null);
     setFailures(null);
 
-    let txt = ruleText;
-    if (ruleTab === "builder") {
-      const ast = toAST(builderRoot, fieldTypeMap);
-      const obj = JSON.parse(ruleText) as Record<string, unknown>;
-      obj.root = ast;
-      txt = JSON.stringify(obj, null, 2);
-      setRuleText(txt);
-    }
-
     let parsedRule: unknown;
     let parsedData: unknown;
     try {
-      parsedRule = JSON.parse(txt);
+      parsedRule = JSON.parse(ruleText);
     } catch {
       setRunError("Rule JSON is invalid.");
       return;
@@ -658,7 +658,6 @@ function PlaygroundSection({ dark }: { dark: boolean }) {
     }
   }
 
-  const current = examples.find((e) => e.id === selectedId) ?? defaultExample;
   const catColor = CATEGORY_COLORS[current.category] ?? qararTokens.dark.primary;
 
   return (
@@ -743,7 +742,12 @@ function PlaygroundSection({ dark }: { dark: boolean }) {
               </div>
             )}
             {ruleTab === "builder" ? (
-              <LogicGroup node={builderRoot} schema={schema} depth={0} isRoot onChange={handleBuilderChange} />
+              <RuleBuilder
+                value={currentRule}
+                onChange={handleRuleChange}
+                fields={builderFields}
+                theme={dark ? "dark" : "light"}
+              />
             ) : (
               <textarea value={ruleText} onChange={(e) => setRuleText(e.target.value)} rows={28} spellCheck={false} />
             )}

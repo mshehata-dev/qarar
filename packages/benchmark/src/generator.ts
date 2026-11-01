@@ -100,7 +100,7 @@ export class DatasetGenerator {
 
   private floatBetween(min: number, max: number, decimals: number = 2): number {
     const val = this.prng() * (max - min) + min;
-    const factor = Math.pow(10, decimals);
+    const factor = 10 ** decimals;
     return Math.round(val * factor) / factor;
   }
 

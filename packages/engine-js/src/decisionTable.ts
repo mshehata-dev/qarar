@@ -1,5 +1,5 @@
 import type { DecisionTable, DecisionBranch } from "@qarar/spec";
-import { evaluate, TraceEntry } from "./index.js";
+import { evaluate, type TraceEntry } from "./index.js";
 
 export interface BranchEvaluation<T = unknown> {
   branch: DecisionBranch<T>;

@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { z } from "zod";
 import {
   rule,
-  where,
   checkRule,
   compileRule,
   compileToSQL,

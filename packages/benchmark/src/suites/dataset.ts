@@ -10,7 +10,7 @@ import {
   fintechFraudRule,
   healthcareConsentRule,
 } from "../fixtures.js";
-import { DatasetGenerator, DomainType } from "../generator.js";
+import { DatasetGenerator, type DomainType } from "../generator.js";
 
 export interface DatasetSuiteOptions {
   rows?: number;

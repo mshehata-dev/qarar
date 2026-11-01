@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { DecisionTable } from "@qarar/spec";
+import type { DecisionTable } from "@qarar/spec";
 import { evaluateDecisionTable } from "../index.js";
 
 describe("evaluateDecisionTable", () => {

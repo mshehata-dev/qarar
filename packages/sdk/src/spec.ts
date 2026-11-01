@@ -170,6 +170,8 @@ export function validateDecisionTable<T = unknown>(input: unknown): DecisionTabl
   return DecisionTableSchema.parse(input) as DecisionTable<T>;
 }
 
-export function safeValidateDecisionTable<T = unknown>(input: unknown) {
-  return DecisionTableSchema.safeParse(input);
+export function safeValidateDecisionTable<T = unknown>(
+  input: unknown
+): z.SafeParseReturnType<unknown, DecisionTable<T>> {
+  return DecisionTableSchema.safeParse(input) as z.SafeParseReturnType<unknown, DecisionTable<T>>;
 }

@@ -1,7 +1,7 @@
-import { z } from "zod";
-import { rule, RuleBuilder } from "./builder.js";
-import { checkRule, CheckRuleResult } from "./engine.js";
-import { ExplainOptions } from "./explainability.js";
+import type { z } from "zod";
+import { rule, type RuleBuilder } from "./builder.js";
+import { checkRule, type CheckRuleResult } from "./engine.js";
+import type { ExplainOptions } from "./explainability.js";
 
 export interface QararSchemaInstance<T extends z.ZodTypeAny> {
   schema: T;

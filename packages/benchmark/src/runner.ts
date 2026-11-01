@@ -2,7 +2,6 @@
  * Statistical benchmarking engine with nanosecond precision and memory profiling.
  */
 
-import { performance } from "node:perf_hooks";
 import type {
   BenchmarkResult,
   BenchmarkRunnerOptions,
@@ -52,7 +51,7 @@ export function computePercentiles(samplesUs: number[]): LatencyPercentiles {
   const p99Us = quantile(0.99);
 
   // Variance & Standard Deviation
-  const variance = sorted.reduce((acc, val) => acc + Math.pow(val - meanUs, 2), 0) / n;
+  const variance = sorted.reduce((acc, val) => acc + (val - meanUs) ** 2, 0) / n;
   const stdDevUs = Math.sqrt(variance);
 
   const round = (v: number) => Math.round(v * 1000) / 1000;
@@ -150,7 +149,7 @@ export class BenchmarkRunner {
    * Benchmarks evaluation across an entire dataset array in batch mode.
    */
   async runDatasetBatch<T extends Record<string, unknown>>(
-    name: string,
+    _name: string,
     dataset: T[],
     evaluateFn: (item: T) => boolean
   ): Promise<{

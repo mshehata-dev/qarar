@@ -36,7 +36,7 @@ function parseArgs(args: string[]): CLIOptions {
       }
     } else if (arg === "--rows" && args[i + 1]) {
       const r = parseInt(args[++i], 10);
-      if (!isNaN(r) && r > 0) options.rows = r;
+      if (!Number.isNaN(r) && r > 0) options.rows = r;
     } else if (arg === "--format" && args[i + 1]) {
       const f = args[++i].toLowerCase();
       if (["table", "json", "markdown"].includes(f)) {

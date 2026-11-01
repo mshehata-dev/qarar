@@ -171,8 +171,8 @@ export function evaluate(
   return { result: trace.passed, trace };
 }
 
-import { safeValidateRule, validateRule, Rule, safeValidateDecisionTable, DecisionTable, DecisionBranch } from "./spec.js";
-import { explainFailures, ExplainOptions } from "./explainability.js";
+import { safeValidateRule, validateRule, type Rule, safeValidateDecisionTable, type DecisionTable, type DecisionBranch } from "./spec.js";
+import { explainFailures, type ExplainOptions } from "./explainability.js";
 
 export interface CheckRuleResult {
   ok: boolean;

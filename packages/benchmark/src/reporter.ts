@@ -2,7 +2,7 @@
  * Result formatters: ANSI colored terminal tables, Markdown tables, and JSON reports.
  */
 
-import type { BenchmarkResult, DatasetBenchmarkResult } from "./types.js";
+import type { BenchmarkResult } from "./types.js";
 
 const ANSI = {
   reset: "\x1b[0m",
@@ -59,7 +59,7 @@ export class BenchmarkReporter {
       lines.push(`${ANSI.dim}─`.repeat(105) + ANSI.reset);
 
       for (const res of catResults) {
-        const name = res.name.length > 44 ? res.name.slice(0, 41) + "..." : res.name;
+        const name = res.name.length > 44 ? `${res.name.slice(0, 41)}...` : res.name;
         const throughput = `${res.opsPerSec.toLocaleString()} ops/s`;
         const avg = `${res.avgLatencyUs.toFixed(2)} µs`;
         const p50 = res.percentiles ? `${res.percentiles.p50Us.toFixed(2)} µs` : "-";

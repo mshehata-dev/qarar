@@ -93,7 +93,7 @@ for (const file of packageFiles) {
   if (isDryRun) {
     console.log(`  • [DRY-RUN] ${relPath}: ${prevVersion} ➔ ${newVersion}`);
   } else {
-    fs.writeFileSync(file, JSON.stringify(json, null, 2) + "\n", "utf-8");
+    fs.writeFileSync(file, `${JSON.stringify(json, null, 2)}\n`, "utf-8");
     console.log(`  ✓ ${relPath}: ${prevVersion} ➔ ${newVersion}`);
   }
 }

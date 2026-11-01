@@ -1,10 +1,10 @@
 # Qarar — Project Status & Progress Tracker
 
-> **Last Updated:** October 2026  
+> **Last Updated:** November 2026  
 > **Current Version:** `v0.0.4`  
 > **Active Branch:** `main` (Synchronized with `dev`)  
 > **Monorepo Build Status:** 🟢 All 12 packages and applications building cleanly (`pnpm exec turbo run build`)  
-> **Test Status:** 🟢 100% passing across 15 test tasks (`pnpm exec turbo run test`)  
+> **Test Status:** 🟢 100% passing across 16 test tasks (`pnpm exec turbo run test`)  
 > **Linter Status:** 🟢 100% passing across 12 packages with Biome (`pnpm run lint`)  
 > **Smoke Test Status:** 🟢 100% passing (`pnpm run smoke:sdk:published`)  
 
@@ -20,7 +20,7 @@
 | **`@qarar/compiler-sql`** | `packages/compiler-sql` | Internal | 16 tests + Biome | 🟢 Stable | AST to SQL `WHERE` clause compiler supporting `snake`, `quote`, and `path` column styles. |
 | **`@qarar/compiler-mongo`** | `packages/compiler-mongo` | Internal | 16 tests + Biome | 🟢 Stable | AST to MongoDB filter object compiler supporting `$and`, `$or`, `$nor`, `$in`, `$regex`. |
 | **`@qarar/sdk`** | `packages/sdk` | Public | 21 tests + Biome | 🟢 Production | Main public npm package. Exposes fluent builder API (`rule()`, `switchOn()`), validator, engine, compilers, and schema helper (`createQarar`). |
-| **`@qarar/react-builder`** | `packages/react-builder` | Public | TS check + Biome | 🟢 Production | Visual rule-builder UI component (`<RuleBuilder />`) for embedding in web applications. |
+| **`@qarar/react-builder`** | `packages/react-builder` | Public | 15 tests + Biome | 🟢 Production | Visual rule-builder UI component (`<RuleBuilder />`) for embedding in web applications. |
 | **`@qarar/theme`** | `packages/theme` | Public | TS check + Biome | 🟢 Production | Unified design tokens, theme variables, and CSS stylesheets for Qarar UI components. |
 | **`@qarar/benchmark`** | `packages/benchmark` | Internal | 8 tests + Biome | 🟢 Production | Performance benchmark suite with micro-benchmarks, dataset generators, and percentile reporting CLI. |
 | **`@qarar/playground`** | `apps/playground` | App | Build check + Biome | 🟢 Production | Interactive React + Vite testing studio migrated to `@qarar/react-builder`, test data, and AST inspection. |
@@ -40,10 +40,11 @@ Vitest Test Results:
  • @qarar/compiler-mongo:  1 test file,   16 passed (100%)
  • @qarar/sdk:             4 test files,  21 passed (100%)
  • @qarar/benchmark:       1 test file,    8 passed (100%)
-Total Vitest Tests:       12 test files, 116 tests passed (0 failures)
+ • @qarar/react-builder:   1 test file,   15 passed (100%)
+Total Vitest Tests:       13 test files, 131 tests passed (0 failures)
 
 Biome Linter Results:
- • Checked 12 packages / 89 files in 50ms (0 errors)
+ • Checked 12 packages / 86 files (0 errors, 0 warnings)
  • turbo run lint: 12 successful, 12 total
 ```
 

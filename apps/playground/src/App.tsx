@@ -39,12 +39,13 @@ const BRAND_NAME = "Qarar";
 const THEME_STORAGE_KEY = "qarar.theme.v1";
 const VERSION_STORAGE_KEY = "qarar.version.v1";
 const VERSIONED_EXAMPLES: Record<string, typeof EXAMPLES> = {
+  "0.1.0": EXAMPLES,
   "0.0.4": EXAMPLES,
   "0.0.3": EXAMPLES,
   "0.0.2": EXAMPLES,
 };
 const AVAILABLE_VERSIONS = Object.keys(VERSIONED_EXAMPLES);
-const DEFAULT_VERSION = AVAILABLE_VERSIONS[0] ?? "0.0.4";
+const DEFAULT_VERSION = "0.0.4";
 
 type AppSection = "landing" | "install" | "docs" | "playground";
 type RuleTab = "builder" | "json";
@@ -644,7 +645,7 @@ function PlaygroundSection({ dark }: { dark: boolean }) {
 
     const validated = safeValidateRule(parsedRule);
     if (!validated.success) {
-      setRunError("Schema error:\n" + validated.error.issues.map((i) => `  ${i.path.join(".")} — ${i.message}`).join("\n"));
+      setRunError(`Schema error:\n${validated.error.issues.map((i) => `  ${i.path.join(".")} — ${i.message}`).join("\n")}`);
       return;
     }
     try {
@@ -689,7 +690,7 @@ function PlaygroundSection({ dark }: { dark: boolean }) {
                   key={ex.id}
                   onClick={() => navigate(`/${resolvedVersion}/playground/${ex.id}`)}
                   title={ex.description}
-                  style={active ? { background: color + "18", borderRight: `2px solid ${color}`, color } : {}}
+                  style={active ? { background: `${color}18`, borderRight: `2px solid ${color}`, color } : {}}
                   className={cn(
                     "w-full text-left px-4 py-1.5 text-[12px] transition-colors",
                     active ? "font-semibold pr-3" : "text-subtle hover:text-ink hover:bg-surface-2 border-r-2 border-r-transparent"

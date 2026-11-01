@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { RuleNode } from "@qarar/spec";
 import { getThemeTokens, type QararTheme } from "@qarar/theme";
 import {
@@ -6,10 +6,10 @@ import {
   toAST,
   defaultComparison,
   defaultGroup,
-  BuilderNode,
-  BuilderGroup,
-  BuilderComparison,
-  AllOp,
+  type BuilderNode,
+  type BuilderGroup,
+  type BuilderComparison,
+  type AllOp,
 } from "./builderModel.js";
 
 export interface FieldDefinition {
@@ -52,7 +52,10 @@ export function RuleBuilder({
   className,
   theme = "dark",
 }: RuleBuilderProps) {
-  const rootAST = "root" in value ? value.root : value;
+  const rootAST =
+    value && typeof value === "object" && "root" in value
+      ? (value as { root: RuleNode }).root
+      : (value as RuleNode);
   const [tree, setTree] = useState<BuilderNode>(() => fromAST(rootAST));
   const isInternal = useRef(false);
 
@@ -62,7 +65,7 @@ export function RuleBuilder({
       return;
     }
     setTree(fromAST(rootAST));
-  }, [JSON.stringify(rootAST)]);
+  }, [rootAST]);
 
   const fieldTypeMap = fields.reduce<Record<string, string>>((acc, f) => {
     acc[f.path] = f.type ?? "string";
@@ -329,6 +332,11 @@ function ComparisonView({
             boxSizing: "border-box",
           }}
         >
+          {node.field && !fields.some((f) => f.path === node.field) && (
+            <option value={node.field}>
+              {node.field} (custom)
+            </option>
+          )}
           {fields.map((f) => (
             <option key={f.path} value={f.path}>
               {f.label ?? f.path} ({f.path})

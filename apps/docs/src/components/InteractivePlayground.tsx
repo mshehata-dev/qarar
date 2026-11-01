@@ -6,10 +6,10 @@ import {
   checkDecisionTable,
   compileToSQL,
   compileToMongo,
-  Rule,
-  RuleNode,
-  DecisionTable,
-  TraceEntry,
+  type Rule,
+  type RuleNode,
+  type DecisionTable,
+  type TraceEntry,
 } from "@qarar/sdk";
 import { RuleBuilder } from "@qarar/react-builder";
 import { getThemeTokens, qararTokens, type QararTheme } from "@qarar/theme";
@@ -202,11 +202,11 @@ const PRESETS: Preset[] = [
 
 function generateTSCode(node: RuleNode, indent = "  "): string {
   if (node.type === "and") {
-    const parts = node.conditions.map((c) => generateTSCode(c, indent + "  "));
+    const parts = node.conditions.map((c) => generateTSCode(c, `${indent}  `));
     return `and(\n${parts.map((p) => `${indent}  ${p}`).join(",\n")}\n${indent})`;
   }
   if (node.type === "or") {
-    const parts = node.conditions.map((c) => generateTSCode(c, indent + "  "));
+    const parts = node.conditions.map((c) => generateTSCode(c, `${indent}  `));
     return `or(\n${parts.map((p) => `${indent}  ${p}`).join(",\n")}\n${indent})`;
   }
   if (node.type === "not") {

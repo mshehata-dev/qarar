@@ -1,12 +1,12 @@
 import {
-  Rule,
-  RuleNode,
-  ValueNode,
-  FieldNode,
-  ScalarValue,
+  type Rule,
+  type RuleNode,
+  type ValueNode,
+  type FieldNode,
+  type ScalarValue,
   validateRule,
-  DecisionBranch,
-  DecisionTable,
+  type DecisionBranch,
+  type DecisionTable,
   validateDecisionTable,
 } from "./spec.js";
 

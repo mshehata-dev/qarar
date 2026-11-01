@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateDecisionTable, DecisionTable } from "../index.ts";
+import { validateDecisionTable, type DecisionTable } from "../index.ts";
 
 describe("DecisionTable Schema Validation", () => {
   it("validates a valid decision table", () => {

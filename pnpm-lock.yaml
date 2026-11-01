@@ -163,8 +163,8 @@ importers:
   examples/published-test-app:
     dependencies:
       '@qarar/sdk':
-        specifier: workspace:*
-        version: link:../../packages/sdk
+        specifier: file:../../packages/sdk
+        version: file:packages/sdk
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -279,6 +279,9 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@24.13.3)(lightningcss@1.32.0)
 
   packages/sdk:
     dependencies:
@@ -1238,6 +1241,9 @@ packages:
     resolution: {integrity: sha512-Fa2Iyw7kaDRzGMfNYNUXNW2zbL5FQVDgSOcbDHdzBrDEdpqOqg8TcZ68F22ol6NJ9IGzvUdmeyZypLW5dyhqsg==}
     cpu: [x64]
     os: [win32]
+
+  '@qarar/sdk@file:packages/sdk':
+    resolution: {directory: packages/sdk, type: directory}
 
   '@radix-ui/number@1.1.2':
     resolution: {integrity: sha512-ceTwaxc4I5IOi97DgCotl3pqiyRGvffcc0oOsE2dQYaJOFIDsDt4VWG6xEbg1QePv9QWausCEIppud/tJ1wNig==}
@@ -4612,6 +4618,12 @@ snapshots:
 
   '@pagefind/windows-x64@1.5.2':
     optional: true
+
+  '@qarar/sdk@file:packages/sdk':
+    dependencies:
+      '@qarar/compiler-mongo': link:packages/compiler-mongo
+      '@qarar/compiler-sql': link:packages/compiler-sql
+      zod: 3.25.76
 
   '@radix-ui/number@1.1.2': {}
 

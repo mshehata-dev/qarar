@@ -52,7 +52,7 @@ function parseValue(raw: string): unknown {
   if (lower === "false") return false;
   if (lower === "null" || lower === "") return null;
   const num = Number(raw);
-  if (!isNaN(num) && raw.trim() !== "") return num;
+  if (!Number.isNaN(num) && raw.trim() !== "") return num;
   return raw;
 }
 

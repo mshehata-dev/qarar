@@ -30,7 +30,8 @@
 				"noStaticElementInteractions": "off"
 			},
 			"complexity": {
-				"noImportantStyles": "off"
+				"noImportantStyles": "off",
+				"noStaticOnlyClass": "off"
 			},
 			"suspicious": {
 				"noArrayIndexKey": "off",

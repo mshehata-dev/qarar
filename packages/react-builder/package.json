@@ -1,6 +1,7 @@
 {
   "name": "@qarar/react-builder",
   "version": "0.0.4",
+  "private": true,
   "description": "Embeddable React Visual Rule Builder for Qarar AST",
   "keywords": [
     "qarar",
@@ -27,9 +28,6 @@
     "dev": "tsc -p tsconfig.json --watch",
     "test": "vitest run",
     "lint": "biome lint ."
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "dependencies": {
     "@qarar/spec": "workspace:*",

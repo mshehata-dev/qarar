@@ -1,7 +1,8 @@
 {
   "name": "@qarar/spec",
   "version": "0.0.4",
-  "description": "Qarar specification — AST types and Zod schemas",
+  "private": true,
+  "description": "Qarar specification — Zero-dependency portable AST types and native validators",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -17,9 +18,6 @@
     "dev": "tsc -p tsconfig.json --watch",
     "test": "vitest run",
     "lint": "biome lint ."
-  },
-  "dependencies": {
-    "zod": "^3.24.1"
   },
   "devDependencies": {
     "typescript": "^5.7.2",

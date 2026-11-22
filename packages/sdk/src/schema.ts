@@ -1,22 +1,35 @@
-import type { z } from "zod";
 import { rule, type RuleBuilder } from "./builder.js";
 import { checkRule, type CheckRuleResult } from "./engine.js";
 import type { ExplainOptions } from "./explainability.js";
 
-export interface QararSchemaInstance<T extends z.ZodTypeAny> {
-  schema: T;
+export type SchemaIssue = { path?: (string | number)[]; message: string };
+
+export type SchemaParseResult<T> =
+  | { success: true; data: T }
+  | { success: false; error: { issues?: SchemaIssue[]; message?: string } };
+
+export interface SchemaLike<T = unknown> {
+  safeParse(data: unknown): SchemaParseResult<T>;
+}
+
+export type InferSchemaData<S> = S extends { safeParse(data: unknown): SchemaParseResult<infer D> }
+  ? D
+  : unknown;
+
+export interface QararSchemaInstance<S extends SchemaLike<any>> {
+  schema: S;
   rule(nameOrId?: string): RuleBuilder;
-  validateData(data: unknown): z.SafeParseReturnType<unknown, z.infer<T>>;
+  validateData(data: unknown): SchemaParseResult<InferSchemaData<S>>;
   check(
     ruleInput: unknown,
     data: unknown,
     options?: ExplainOptions
-  ): CheckRuleResult & { dataError?: z.ZodError };
+  ): CheckRuleResult & { dataError?: unknown };
 }
 
-export function createQarar<T extends z.ZodTypeAny>(
-  dataSchema: T
-): QararSchemaInstance<T> {
+export function createQarar<S extends SchemaLike<any>>(
+  dataSchema: S
+): QararSchemaInstance<S> {
   return {
     schema: dataSchema,
     rule(nameOrId?: string): RuleBuilder {
@@ -29,15 +42,22 @@ export function createQarar<T extends z.ZodTypeAny>(
       ruleInput: unknown,
       data: unknown,
       options?: ExplainOptions
-    ): CheckRuleResult & { dataError?: z.ZodError } {
+    ): CheckRuleResult & { dataError?: unknown } {
       const dataParse = dataSchema.safeParse(data);
       if (!dataParse.success) {
+        const issues = dataParse.error?.issues;
+        const reasons =
+          Array.isArray(issues) && issues.length > 0
+            ? issues.map((issue) => {
+                const p = Array.isArray(issue.path) ? issue.path.join(".") : "";
+                return p ? `Data error at ${p}: ${issue.message}` : `Data error: ${issue.message}`;
+              })
+            : [dataParse.error?.message || "Data validation error"];
+
         return {
           ok: false,
           result: false,
-          reasons: dataParse.error.issues.map(
-            (issue) => `Data error at ${issue.path.join(".")}: ${issue.message}`
-          ),
+          reasons,
           trace: { type: "logical", operator: "and", passed: false, children: [] },
           dataError: dataParse.error,
         };

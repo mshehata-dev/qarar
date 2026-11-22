@@ -1,11 +1,14 @@
 {
   "name": "@qarar/sdk",
   "version": "0.0.4",
-  "description": "Single-package Qarar SDK (spec + engine + explainability)",
+  "description": "Zero-dependency single-package Qarar SDK — portable AST, 6M ops/sec engine, SQL/Mongo pushdown & explainability",
   "keywords": [
     "rules-engine",
     "business-rules",
     "decision-engine",
+    "zero-dependencies",
+    "ast",
+    "sql-pushdown",
     "typescript"
   ],
   "license": "MIT",
@@ -47,9 +50,9 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "dev": "tsc -p tsconfig.json --watch",
+    "dev": "tsup --watch",
     "test": "vitest run",
     "lint": "biome lint .",
     "prepublishOnly": "pnpm run build && pnpm run test"
@@ -57,13 +60,15 @@
   "publishConfig": {
     "access": "public"
   },
-  "dependencies": {
+  "devDependencies": {
     "@qarar/compiler-mongo": "workspace:*",
     "@qarar/compiler-sql": "workspace:*",
-    "zod": "^3.24.1"
-  },
-  "devDependencies": {
+    "@qarar/engine-js": "workspace:*",
+    "@qarar/explainability": "workspace:*",
+    "@qarar/spec": "workspace:*",
+    "tsup": "^9.0.0",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "zod": "^3.24.1"
   }
 }

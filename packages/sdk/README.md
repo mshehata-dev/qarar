@@ -179,7 +179,7 @@ type Rule = {
 Returns:
 
 ```ts
-{ success: true; data: Rule } | { success: false; error: ZodError }
+{ success: true; data: Rule } | { success: false; error: ValidationError }
 ```
 
 Use this in production-friendly flows when you want validation errors instead of throws.

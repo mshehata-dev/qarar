@@ -45,7 +45,7 @@ export default defineConfig({
             { label: 'Engine & checkRule', link: '/api/engine-and-check/' },
             { label: 'SQL & Mongo Compilers', link: '/api/database-compilers/' },
             { label: 'React RuleBuilder UI', link: '/api/react-builder/' },
-            { label: 'Zod Schema Validation', link: '/api/schema-validation/' },
+            { label: 'Schema Validation', link: '/api/schema-validation/' },
             { label: 'Benchmark CLI Tool', link: '/api/benchmark-cli/' },
           ],
         },

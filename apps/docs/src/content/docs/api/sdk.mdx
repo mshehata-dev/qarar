@@ -27,7 +27,7 @@ pnpm add @qarar/sdk
 | **[`compileToMongo(rule)`](/api/database-compilers/)** | `(rule: Rule) => { filter: Record<string, unknown> }` | Compiles a rule AST into a MongoDB query filter at **~1.33M compiles/sec**. |
 | **[`explainFailures(trace)`](/concepts/explainability/)** | `(trace: TraceEntry[]) => string[]` | Formats failed condition trace entries into human-readable strings. |
 | **[`validateRule(json)`](/concepts/ast-specification/)** | `(input: unknown) => { valid: boolean; errors?: string[] }` | Validates an untrusted JSON object against the strict Qarar rule schema. |
-| **[`createQarar(zodSchema)`](/api/schema-validation/)** | `<T>(schema: ZodType<T>) => SchemaBoundQarar<T>` | Binds rule execution to a Zod schema for runtime payload validation. |
+| **[`createQarar(schema)`](/api/schema-validation/)** | `<T>(schema: SchemaLike<T>) => SchemaBoundQarar<T>` | Binds rule execution to a domain schema validator for runtime payload validation. |
 
 ---
 

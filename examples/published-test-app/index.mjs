@@ -6,7 +6,6 @@ import {
   compileToMongo,
   createQarar,
 } from "@qarar/sdk";
-import { z } from "zod";
 
 console.log("=== Qarar SDK 5 Usability & DX Feature Showcase ===");
 
@@ -41,13 +40,26 @@ console.log("[compileToSQL] WHERE Clause:", sqlResult.sql);
 const mongoResult = compileToMongo(builtRule);
 console.log("[compileToMongo] Filter Object:", JSON.stringify(mongoResult.filter));
 
-// 5. Schema-Driven Type Safety & Autocomplete
-const CustomerSchema = z.object({
-  customer: z.object({
-    age: z.number(),
-    plan: z.string(),
-  }),
-});
+// 5. Zero-Dependency Schema-Driven Type Safety
+const CustomerSchema = {
+  safeParse(data) {
+    if (
+      data &&
+      typeof data === "object" &&
+      data.customer &&
+      typeof data.customer.age === "number" &&
+      typeof data.customer.plan === "string"
+    ) {
+      return { success: true, data };
+    }
+    return {
+      success: false,
+      error: {
+        issues: [{ path: ["customer", "age"], message: "Expected number" }],
+      },
+    };
+  },
+};
 
 const q = createQarar(CustomerSchema);
 const schemaCheck = q.check(builtRule, inputData);

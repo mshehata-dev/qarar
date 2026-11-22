@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { z } from "zod";
 import {
   rule,
   checkRule,
@@ -73,13 +72,33 @@ describe("SDK Usability & DX Features", () => {
     });
   });
 
-  describe("createQarar (Schema-driven)", () => {
-    const CustomerSchema = z.object({
-      customer: z.object({
-        age: z.number(),
-        plan: z.string(),
-      }),
-    });
+  describe("createQarar (Zero-Dependency Schema-driven)", () => {
+    // Pure TypeScript / Standard Schema validator without any external library
+    const CustomerSchema = {
+      safeParse(data: unknown) {
+        if (
+          typeof data === "object" &&
+          data !== null &&
+          "customer" in data &&
+          typeof (data as { customer: unknown }).customer === "object" &&
+          (data as { customer: Record<string, unknown> }).customer !== null &&
+          typeof (data as { customer: { age: unknown } }).customer.age === "number" &&
+          typeof (data as { customer: { plan: unknown } }).customer.plan === "string"
+        ) {
+          return {
+            success: true as const,
+            data: data as { customer: { age: number; plan: string } },
+          };
+        }
+        return {
+          success: false as const,
+          error: {
+            issues: [{ path: ["customer", "age"], message: "Expected number" }],
+            message: "Invalid customer schema",
+          },
+        };
+      },
+    };
 
     const q = createQarar(CustomerSchema);
 

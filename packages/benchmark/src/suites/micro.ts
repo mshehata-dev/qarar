@@ -90,7 +90,7 @@ export async function runMicroSuite(runner: BenchmarkRunner = new BenchmarkRunne
     )
   );
 
-  // 5. Full Pipeline: checkRule (Zod validation + evaluation + explainability string reasons)
+  // 5. Full Pipeline: checkRule (validation + evaluation + explainability string reasons)
   results.push(
     await runner.runMicro(
       "checkRule() - Full Pipeline (Validation + Eval + Explainability)",

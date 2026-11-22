@@ -1,36 +1,42 @@
 ---
 title: Schema Validation API (createQarar)
-description: Bind Qarar to Zod domain schemas to enforce runtime payload data validation before rule execution.
+description: Bind Qarar to domain schemas to enforce runtime payload data validation before rule execution.
 ---
 
 import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
 
 When building mission-critical services, evaluating rules against untrusted or malformed input payloads can lead to silent false negatives.
 
-`createQarar` binds Qarar to a **Zod** schema. It automatically validates incoming data payloads before executing rules, ensuring that missing fields or type mismatches are caught immediately.
+`createQarar` binds Qarar to any domain schema validator (implementing the Standard Schema `.safeParse()` interface). It automatically validates incoming data payloads before executing rules, ensuring that missing fields or type mismatches are caught immediately — with zero external dependencies required by Qarar.
 
 ---
 
-## 1. `createQarar(zodSchema)`
+## 1. `createQarar(schema)`
 
 ```ts
-import { z } from "zod";
 import { createQarar } from "@qarar/sdk";
 
-// 1. Define strict domain schema using Zod
-export const CustomerContextSchema = z.object({
-  customer: z.object({
-    id: z.string(),
-    age: z.number().int().min(0),
-    tier: z.enum(["bronze", "silver", "gold", "vip"]),
-  }),
-  cart: z.object({
-    total: z.number().nonnegative(),
-    itemCount: z.number().int().positive(),
-  }),
-});
+// Define a domain schema validator (any object with a .safeParse method)
+export const CustomerContextSchema = {
+  safeParse(data: unknown) {
+    if (
+      data &&
+      typeof data === "object" &&
+      "customer" in data &&
+      typeof (data as any).customer?.age === "number"
+    ) {
+      return { success: true as const, data };
+    }
+    return {
+      success: false as const,
+      error: {
+        issues: [{ path: ["customer", "age"], message: "Expected valid customer age" }],
+      },
+    };
+  },
+};
 
-// 2. Create schema-bound Qarar instance
+// Create schema-bound Qarar instance
 export const q = createQarar(CustomerContextSchema);
 ```
 
@@ -41,7 +47,7 @@ export const q = createQarar(CustomerContextSchema);
 Use `q.check(rule, payload)` to validate input data and evaluate in a single step:
 
 ```ts
-// 3. Build rule
+// 1. Build rule
 const promoRule = q.rule("VIP Checkout Promo")
   .where("customer.age").gte(18)
   .and("customer.tier").in(["gold", "vip"])
@@ -57,12 +63,12 @@ const validCheck = q.check(promoRule, {
 console.log(validCheck.ok);      // true (Schema valid)
 console.log(validCheck.result);  // true (Rule passed)
 
-// Case B: Malformed Payload (age is negative string) ➔ Caught by Zod
+// Case B: Malformed Payload (age is wrong type) ➔ Caught by Schema
 const invalidCheck = q.check(promoRule, {
   customer: { id: "cust_123", age: "invalid-age", tier: "vip" },
   cart: { total: 150, itemCount: 2 },
 });
 
-console.log(invalidCheck.ok);     // false (Schema invalid!)
-console.log(invalidCheck.errors); // Zod issues detailing invalid field types
+console.log(invalidCheck.ok);      // false (Schema invalid!)
+console.log(invalidCheck.reasons); // ["Data error at customer.age: Expected valid customer age"]
 ```

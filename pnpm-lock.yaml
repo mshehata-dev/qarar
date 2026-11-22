@@ -74,9 +74,6 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
-      zod:
-        specifier: ^3.24.1
-        version: 3.25.76
 
   apps/playground:
     dependencies:
@@ -165,9 +162,6 @@ importers:
       '@qarar/sdk':
         specifier: file:../../packages/sdk
         version: link:../../packages/sdk
-      zod:
-        specifier: ^3.24.1
-        version: 3.25.76
 
   packages/benchmark:
     dependencies:
@@ -189,9 +183,6 @@ importers:
       '@qarar/spec':
         specifier: workspace:*
         version: link:../spec
-      zod:
-        specifier: ^3.24.1
-        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
@@ -309,9 +300,6 @@ importers:
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@24.13.3)(lightningcss@1.32.0)
-      zod:
-        specifier: ^3.24.1
-        version: 3.25.76
 
   packages/spec:
     devDependencies:

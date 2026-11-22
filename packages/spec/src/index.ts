@@ -413,7 +413,7 @@ export function safeValidateDecisionTable<T = unknown>(input: unknown): Validati
 }
 
 // ---------------------------------------------------------------------------
-// Backward-Compatibility Schema Helpers (Zero-dependency drop-in for Zod API)
+// Schema Helpers (Zero-dependency drop-in .parse() and .safeParse() API)
 // ---------------------------------------------------------------------------
 
 export const RuleSchema = {

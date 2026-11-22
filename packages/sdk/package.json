@@ -60,6 +60,7 @@
   "publishConfig": {
     "access": "public"
   },
+  "dependencies": {},
   "devDependencies": {
     "@qarar/compiler-mongo": "workspace:*",
     "@qarar/compiler-sql": "workspace:*",
@@ -68,7 +69,6 @@
     "@qarar/spec": "workspace:*",
     "tsup": "^9.0.0",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8",
-    "zod": "^3.24.1"
+    "vitest": "^2.1.8"
   }
 }

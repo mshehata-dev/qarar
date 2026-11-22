@@ -12,7 +12,6 @@ import {
   type Rule,
   safeValidateDecisionTable,
   type DecisionTable,
-  type DecisionBranch,
 } from "@qarar/spec";
 import { explainFailures, type ExplainOptions } from "@qarar/explainability";
 

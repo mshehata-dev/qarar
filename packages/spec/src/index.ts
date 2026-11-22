@@ -428,7 +428,6 @@ export const DecisionTableSchema = {
 
 export const FieldNodeSchema = {
   parse: (input: unknown): FieldNode => {
-    const issues: ValidationErrorIssue[] = [];
     if (!isObject(input) || input.type !== "field" || typeof input.path !== "string" || !input.path) {
       throw new ValidationError("Invalid FieldNode");
     }
@@ -448,7 +447,6 @@ export const ValueNodeSchema = {
 
 export const DecisionBranchSchema = {
   parse: <T = unknown>(input: unknown): DecisionBranch<T> => {
-    const issues: ValidationErrorIssue[] = [];
     if (!isObject(input) || typeof input.id !== "string" || !input.condition || !("output" in input)) {
       throw new ValidationError("Invalid DecisionBranch");
     }

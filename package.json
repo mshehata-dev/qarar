@@ -1,7 +1,15 @@
 {
   "name": "qarar",
   "private": true,
-  "version": "0.0.4",
+  "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mshehata-dev/qarar.git"
+  },
+  "homepage": "https://github.com/mshehata-dev/qarar#readme",
+  "bugs": {
+    "url": "https://github.com/mshehata-dev/qarar/issues"
+  },
   "packageManager": "pnpm@9.1.0",
   "scripts": {
     "build": "turbo run build",

@@ -220,3 +220,188 @@ starlight-toc a:hover {
     max-width: calc(100% - 18rem) !important;
   }
 }
+
+/* Minimalist Architecture Infographic */
+.qarar-infographic {
+  display: flex;
+  align-items: stretch;
+  gap: 0.75rem;
+  margin: 2.5rem 0;
+  width: 100%;
+}
+
+.infographic-node {
+  flex: 1;
+  min-width: 0;
+  background: var(--qarar-surface);
+  border: 1px solid var(--qarar-border);
+  border-radius: 10px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.infographic-node:hover {
+  border-color: var(--qarar-border-hover);
+  box-shadow: var(--qarar-shadow);
+}
+
+.infographic-node.node-core {
+  border-color: var(--qarar-primary);
+  background: var(--qarar-surface-2);
+}
+
+.node-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--qarar-text-muted);
+  margin-bottom: 0.4rem;
+}
+
+.node-badge.badge-core {
+  color: var(--qarar-primary);
+}
+
+.node-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--qarar-text);
+  margin-bottom: 0.75rem;
+}
+
+.node-code {
+  background: var(--qarar-code-bg);
+  border: 1px solid var(--qarar-code-border);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.76rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--qarar-code-text);
+  margin-bottom: 0.75rem;
+  white-space: pre;
+  line-height: 1.4;
+}
+
+.node-specs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  color: var(--qarar-text);
+  margin-bottom: 0.75rem;
+}
+
+.spec-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.spec-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--qarar-primary);
+  flex-shrink: 0;
+}
+
+.output-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.output-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.output-label {
+  color: var(--qarar-text-muted);
+  font-weight: 500;
+}
+
+.output-result {
+  font-family: ui-monospace, monospace;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.tag-emerald {
+  background: var(--qarar-pass-bg);
+  color: var(--qarar-pass);
+  border: 1px solid var(--qarar-pass-border);
+}
+
+.tag-blue {
+  background: var(--qarar-primary-subtle);
+  color: var(--qarar-primary);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.tag-amber {
+  background: var(--qarar-warn-bg);
+  color: var(--qarar-warn);
+  border: 1px solid var(--qarar-warn-border);
+}
+
+.node-caption {
+  font-size: 0.78rem;
+  color: var(--qarar-text-muted);
+  line-height: 1.4;
+  margin-top: auto;
+  margin-bottom: 0;
+}
+
+.infographic-connector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--qarar-text-subtle);
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .qarar-infographic {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .infographic-connector {
+    transform: rotate(90deg);
+    margin: 0.25rem auto;
+  }
+}
+
+/* Elegant Callouts / Asides styling */
+.starlight-aside {
+  border-radius: 8px !important;
+  border-width: 1px !important;
+  font-size: 0.88rem !important;
+}
+
+.starlight-aside--note {
+  border-color: var(--qarar-border) !important;
+  background-color: var(--qarar-surface) !important;
+}
+
+.starlight-aside--tip {
+  border-color: var(--qarar-primary-subtle) !important;
+  background-color: var(--qarar-primary-alpha) !important;
+}
+
+.starlight-aside--caution,
+.starlight-aside--danger {
+  border-color: var(--qarar-fail-border) !important;
+  background-color: var(--qarar-fail-bg) !important;
+}
+

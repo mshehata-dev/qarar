@@ -1,0 +1,111 @@
+---
+title: "NestJS Guards & Decorators"
+description: "Implement custom NestJS CanActivate guards and @EnforceRule() decorators with @qarar/sdk."
+---
+
+In NestJS applications, business authorization is cleanly decoupled using execution context Guards and method-level Reflect Metadata decorators.
+
+---
+
+## 1. Custom `@EnforceRule()` Decorator
+
+Define a custom decorator to attach rules to controller endpoints:
+
+```ts
+// src/common/decorators/enforce-rule.decorator.ts
+import { SetMetadata } from "@nestjs/common";
+import { Rule } from "@qarar/sdk";
+
+export const RULE_METADATA_KEY = "qarar:rule";
+
+export const EnforceRule = (rule: Rule) => SetMetadata(RULE_METADATA_KEY, rule);
+```
+
+---
+
+## 2. NestJS `RuleGuard` Implementation
+
+Implement a guard that reads the attached rule, extracts the request context, and checks the rule:
+
+```ts
+// src/common/guards/rule.guard.ts
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { Rule, checkRule } from "@qarar/sdk";
+import { RULE_METADATA_KEY } from "../decorators/enforce-rule.decorator";
+
+@Injectable()
+export class RuleGuard implements CanActivate {
+  constructor(private reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const requiredRule = this.reflector.getAllAndOverride<Rule>(RULE_METADATA_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    // If no rule is configured on the method or controller, proceed
+    if (!requiredRule) {
+      return true;
+    }
+
+    const request = context.switchToHttp().getRequest();
+    const evaluationContext = {
+      user: request.user,
+      body: request.body,
+      params: request.params,
+      query: request.query,
+    };
+
+    const decision = checkRule(requiredRule, evaluationContext);
+
+    if (!decision.result) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: "Forbidden",
+        ruleId: requiredRule.id,
+        ruleName: requiredRule.name,
+        reasons: decision.reasons,
+      });
+    }
+
+    return true;
+  }
+}
+```
+
+---
+
+## 3. Controller Usage
+
+Bind the guard and decorate specific controller routes:
+
+```ts
+// src/modules/billing/billing.controller.ts
+import { Controller, Post, Body, UseGuards } from "@nestjs/common";
+import { rule } from "@qarar/sdk";
+import { EnforceRule } from "../../common/decorators/enforce-rule.decorator";
+import { RuleGuard } from "../../common/guards/rule.guard";
+
+// Rule: Refund amounts exceeding $1,000 require Manager role
+const highValueRefundPolicy = rule("High Value Refund Gate")
+  .id("refund-policy-v1")
+  .where("body.amount").lte(1000)
+  .or("user.role").in(["manager", "director", "admin"])
+  .build();
+
+@Controller("billing")
+@UseGuards(RuleGuard)
+export class BillingController {
+  @Post("refund")
+  @EnforceRule(highValueRefundPolicy)
+  async issueRefund(@Body() body: { amount: number; transactionId: string }) {
+    return { status: "Refund approved", amount: body.amount };
+  }
+}
+```

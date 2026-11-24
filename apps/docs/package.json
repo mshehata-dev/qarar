@@ -1,9 +1,10 @@
 {
   "name": "@qarar/docs",
-  "version": "0.0.4",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "pnpm --filter @qarar/theme build && pnpm --filter @qarar/react-builder build && pnpm --filter @qarar/sdk build",
     "dev": "ASTRO_TELEMETRY_DISABLED=1 astro dev",
     "start": "ASTRO_TELEMETRY_DISABLED=1 astro dev",
     "build": "ASTRO_TELEMETRY_DISABLED=1 astro check && ASTRO_TELEMETRY_DISABLED=1 astro build",

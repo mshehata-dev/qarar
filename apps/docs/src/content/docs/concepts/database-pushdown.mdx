@@ -58,6 +58,26 @@ Databases organize column names differently. Configure `columnStyle` to match yo
 | `"path"` | `"customer.age"` | `customer.age` | Tables using JSONB paths or table aliases |
 | `"quote"` | `"customer.age"` | `"customer"."age"` | Preserving exact case or reserved SQL keywords |
 
+### Two-Sided Dynamic Fields & Array Pushdown
+
+When compiling rules that compare dynamic fields using `{{ field.path }}` or array operations:
+
+- **Two-Sided Fields**: Compiles into direct column comparisons in SQL:
+  ```ts
+  rule().where("cart.total").lte("{{customer.creditLimit}}").build();
+  // SQL: cart_total <= customer_credit_limit
+  ```
+- **Array Contains**: Compiles to standard SQL `ANY` expression:
+  ```ts
+  rule().where("user.tags").arrayContains("vip").build();
+  // SQL: 'vip' = ANY(user_tags)
+  ```
+- **Array Length**: Compiles to SQL `ARRAY_LENGTH()` function:
+  ```ts
+  rule().where("order.items").arrayLengthGte(1).build();
+  // SQL: ARRAY_LENGTH(order_items, 1) >= 1
+  ```
+
 ---
 
 ## 2. Compiling to MongoDB
@@ -83,6 +103,26 @@ console.log(JSON.stringify(filter, null, 2));
 // Execute with native MongoDB driver or Mongoose
 const matchingDocs = await db.collection("customers").find(filter).toArray();
 ```
+
+### Dynamic Fields in MongoDB via `$expr`
+
+When comparing two document properties, Qarar compiles to MongoDB's native aggregation `$expr` operator:
+
+```ts
+const creditRule = rule("Dynamic Credit Check")
+  .where("cart.total")
+  .lte("{{customer.creditLimit}}")
+  .build();
+
+const { filter } = compileToMongo(creditRule);
+console.log(filter);
+// ➔ { "$expr": { "$lte": ["$cart.total", "$customer.creditLimit"] } }
+```
+
+Array operations compile naturally:
+- `arrayContains("vip")` ➔ `{ "user.tags": "vip" }`
+- `arrayLength(3)` ➔ `{ "cart.items": { "$size": 3 } }`
+- `arrayLengthGte(2)` ➔ `{ "$expr": { "$gte": [{ "$size": "$cart.items" }, 2] } }`
 
 ---
 

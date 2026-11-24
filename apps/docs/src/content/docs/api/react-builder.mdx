@@ -5,13 +5,10 @@ description: Embed visual rule authoring components directly in React web applic
 
 import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
 
-`@qarar/react-builder` provides a visual, drag-and-drop rule authoring component (`<RuleBuilder />`) designed for embedding into internal admin portals, SaaS dashboards, and workflow editors.
+`@qarar/react-builder` provides a visual rule authoring component (`<RuleBuilder />`) designed for embedding into internal admin portals, SaaS dashboards, and workflow editors.
 
-It allows non-technical teams (Product Managers, Risk Analysts, Operations) to build and edit valid Qarar JSON AST rules without writing code.
-
-```bash
-pnpm add @qarar/react-builder
-```
+> [!NOTE]
+> This component powers the [Interactive Studio](/playground/) and is maintained as an internal workspace package.
 
 ---
 
@@ -78,15 +75,32 @@ export function AdminRuleEditor() {
 
 ---
 
-## 3. Field Definitions
+## 4. Visual Decision Table Builder (`<DecisionTableBuilder />`)
 
-Use `FieldDefinition` to configure how fields appear in the builder dropdowns:
+Visual authoring for multi-case switch matrices (`DecisionTable`):
 
-```ts
-interface FieldDefinition {
-  path: string;                                    // Data path (e.g. "order.shipping.country")
-  label: string;                                   // Display label in UI (e.g. "Shipping Country")
-  type: "string" | "number" | "boolean" | "enum";  // Input control type
-  options?: string[];                              // Select options (when type is "enum")
+```tsx
+import { DecisionTableBuilder } from "@qarar/react-builder";
+import type { DecisionTable } from "@qarar/spec";
+
+export function AdminMatrixEditor() {
+  const [table, setTable] = useState<DecisionTable>(myDecisionTable);
+
+  return (
+    <DecisionTableBuilder
+      value={table}
+      onChange={(updatedTable) => setTable(updatedTable)}
+      matchedBranchId="vip-tier" // Optional: highlight active matched branch in real-time
+    />
+  );
 }
 ```
+
+### Component Props
+
+| Prop | Type | Description |
+| :--- | :--- | :--- |
+| **`value`** | `DecisionTable<T>` | The decision table AST to render and edit. |
+| **`onChange`** | `(table: DecisionTable<T>) => void` | Fired when branches, conditions, or outputs change. |
+| **`matchedBranchId`** | `string \| null` | Optional branch ID to highlight with green `MATCHED` badge. |
+| **`theme`** | `QararTheme` | Optional CSS variable tokens for styling. |

@@ -10,6 +10,9 @@ import {
   ecommerceMediumRule,
   ecommerceComplexRule,
   fintechFraudRule,
+  arrayOperationsRule,
+  dateOperationsRule,
+  dynamicFieldRule,
 } from "../fixtures.js";
 import { DatasetGenerator } from "../generator.js";
 
@@ -115,6 +118,77 @@ export async function runMicroSuite(runner: BenchmarkRunner = new BenchmarkRunne
       "compileToMongo() - AST to MongoDB Filter Object",
       "compiler",
       () => compileToMongo(ecommerceComplexRule),
+      { targetIterations: 100000 }
+    )
+  );
+
+  // 7. Dynamic Fields, Array Ops & Date Ops (Stress Benchmarks)
+  const sampleArray = {
+    cart: {
+      categories: ["books", "electronics", "home"],
+    },
+  };
+  const now = Date.now();
+  const sampleDate = {
+    order: {
+      createdAt: new Date(now - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    user: {
+      registeredAt: new Date(now - 120 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+  };
+  const sampleDynamic = {
+    cart: {
+      total: 350,
+      itemCount: 4,
+    },
+    customer: {
+      creditLimit: 500,
+      maxItems: 10,
+    },
+  };
+
+  results.push(
+    await runner.runMicro(
+      "evaluate() - Dynamic Field Comparison (cart.total <= {{customer.creditLimit}})",
+      "micro",
+      () => evaluate(dynamicFieldRule, sampleDynamic),
+      { targetIterations: 100000 }
+    )
+  );
+
+  results.push(
+    await runner.runMicro(
+      "evaluate() - Array Ops (arrayContains + arrayLengthGte)",
+      "micro",
+      () => evaluate(arrayOperationsRule, sampleArray),
+      { targetIterations: 100000 }
+    )
+  );
+
+  results.push(
+    await runner.runMicro(
+      "evaluate() - Date Ops (withinLast + olderThan)",
+      "micro",
+      () => evaluate(dateOperationsRule, sampleDate),
+      { targetIterations: 100000 }
+    )
+  );
+
+  results.push(
+    await runner.runMicro(
+      "compileToSQL() - Dynamic Fields & Array Ops",
+      "compiler",
+      () => compileToSQL(dynamicFieldRule),
+      { targetIterations: 100000 }
+    )
+  );
+
+  results.push(
+    await runner.runMicro(
+      "compileToMongo() - Dynamic Fields ($expr) & Array Ops",
+      "compiler",
+      () => compileToMongo(dynamicFieldRule),
       { targetIterations: 100000 }
     )
   );

@@ -1,4 +1,10 @@
-import type { RuleNode, ValueNode } from "@qarar/spec";
+import {
+  type RuleNode,
+  type ValueNode,
+  extractFieldPath,
+  isFieldExpression,
+  parseDynamicFieldExpression,
+} from "@qarar/spec";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -18,8 +24,13 @@ function resolveValue(node: ValueNode): unknown {
   switch (node.type) {
     case "field":
       return `$${node.path}`; // used when right-side is a field ref
-    case "string":
+    case "string": {
+      const parsed = parseDynamicFieldExpression(node.value);
+      if (parsed) {
+        return `$${parsed.path}`;
+      }
       return node.value;
+    }
     case "number":
       return node.value;
     case "boolean":
@@ -35,6 +46,23 @@ function fieldPath(node: ValueNode): string {
   if (node.type !== "field") throw new Error("Expected field node on left side");
   return node.path;
 }
+
+function isRightHandField(node: ValueNode): boolean {
+  if (node.type === "field") return true;
+  if (node.type === "string" && isFieldExpression(node.value)) return true;
+  return false;
+}
+
+const MONGO_EXPR_OPS: Record<string, string> = {
+  eq: "$eq",
+  neq: "$ne",
+  gt: "$gt",
+  gte: "$gte",
+  lt: "$lt",
+  lte: "$lte",
+  before: "$lt",
+  after: "$gt",
+};
 
 // ---------------------------------------------------------------------------
 // Core compiler
@@ -63,9 +91,18 @@ function compileNode(node: RuleNode): MongoFilter {
     };
   }
 
-  // All comparison and string operators
   const field = fieldPath(node.left);
   const value = resolveValue(node.right);
+  const isRightField = isRightHandField(node.right);
+
+  // If comparing two dynamic fields, use MongoDB $expr
+  if (isRightField && MONGO_EXPR_OPS[node.type]) {
+    return {
+      $expr: {
+        [MONGO_EXPR_OPS[node.type]]: [`$${field}`, value],
+      },
+    };
+  }
 
   switch (node.type) {
     case "eq":
@@ -106,6 +143,44 @@ function compileNode(node: RuleNode): MongoFilter {
     case "notMatches":
       return { [field]: { $not: { $regex: String(value), $options: "i" } } };
 
+    // Array operations
+    case "arrayContains":
+      return { [field]: value };
+    case "notArrayContains":
+      return { [field]: { $ne: value } };
+    case "arrayContainsAny":
+      return { [field]: { $in: Array.isArray(value) ? value : [value] } };
+    case "arrayContainsAll":
+      return { [field]: { $all: Array.isArray(value) ? value : [value] } };
+    case "arrayContainsNone":
+      return { [field]: { $nin: Array.isArray(value) ? value : [value] } };
+    case "arrayIsEmpty":
+      return { [field]: { $size: 0 } };
+    case "arrayIsNotEmpty":
+      return { [field]: { $not: { $size: 0 } } };
+    case "arrayLength":
+      return typeof value === "number"
+        ? { [field]: { $size: value } }
+        : { $expr: { $eq: [{ $size: `$${field}` }, value] } };
+    case "arrayLengthGte":
+      return { $expr: { $gte: [{ $size: `$${field}` }, value] } };
+    case "arrayLengthLte":
+      return { $expr: { $lte: [{ $size: `$${field}` }, value] } };
+    case "arrayLengthGt":
+      return { $expr: { $gt: [{ $size: `$${field}` }, value] } };
+    case "arrayLengthLt":
+      return { $expr: { $lt: [{ $size: `$${field}` }, value] } };
+
+    // Date operations
+    case "before":
+      return { [field]: { $lt: value } };
+    case "after":
+      return { [field]: { $gt: value } };
+    case "olderThan":
+      return { [field]: { $lt: value } };
+    case "withinLast":
+      return { [field]: { $gte: value } };
+
     default:
       throw new Error(`Unsupported operator for MongoDB: ${(node as { type: string }).type}`);
   }
@@ -116,13 +191,11 @@ function compileNode(node: RuleNode): MongoFilter {
 // ---------------------------------------------------------------------------
 
 /**
- * Compile an Qarar rule to a MongoDB filter object.
- *
- * @example
- * const { filter } = compile(rule);
- * collection.find(filter);
+ * Compile a Qarar rule to a MongoDB filter object.
  */
-export function compile(rule: { root: RuleNode } | RuleNode): MongoCompileResult {
+export function compile(
+  rule: { root: RuleNode } | RuleNode
+): MongoCompileResult {
   const root = "root" in rule ? (rule as { root: RuleNode }).root : rule;
   return { filter: compileNode(root) };
 }

@@ -1,0 +1,93 @@
+---
+title: "Benchmarks & Performance"
+description: "Real benchmark numbers and latency measurements for rule evaluation, large datasets, and database pushdown."
+---
+
+When you evaluate business rules on every incoming API request or Kafka message, the rule engine shouldn't be the bottleneck.
+
+We built `@qarar/benchmark` as an open benchmark suite inside the monorepo so anyone can run the tests locally and verify the numbers. Below are the actual measurements from running 100,000 iterations per test on a standard Apple Silicon development machine.
+
+---
+
+## Benchmark Results
+
+All tests were executed on Node.js 22 using `process.hrtime.bigint()` for nanosecond timing.
+
+| Test Case | Throughput | Average Latency | Median (p50) | 95th Percentile |
+| :--- | :--- | :--- | :--- | :--- |
+| **`compileRule()` (Simple 3 conditions)** | **6.24M ops/s** | 0.16 µs | **0.08 µs** | 0.13 µs |
+| **`evaluate()` (Simple 3 conditions)** | **5.85M ops/s** | 0.17 µs | **0.08 µs** | 0.21 µs |
+| **`evaluate()` (Array checks: `has item` + `length ≥`)** | **3.70M ops/s** | 0.27 µs | **0.17 µs** | 0.33 µs |
+| **`compileRule()` (Nested AND / OR tree)** | **3.03M ops/s** | 0.33 µs | **0.25 µs** | 0.25 µs |
+| **`evaluate()` (Nested AND / OR tree)** | **2.60M ops/s** | 0.38 µs | **0.25 µs** | 0.58 µs |
+| **Dataset Scan (100,000 rows in memory)** | **2.89M rows/s** | 0.34 µs / row | **0.25 µs** | 0.33 µs |
+| **Decision Table (10 branches, first match)** | **1.61M ops/s** | 0.62 µs | **0.38 µs** | 0.88 µs |
+| **Decision Table (50 branches, first match)** | **1.86M ops/s** | 0.54 µs | **0.38 µs** | 0.42 µs |
+| **Dynamic Field (`cart.total <= {{customer.creditLimit}}`)** | **1.82M ops/s** | 0.55 µs | **0.46 µs** | 0.50 µs |
+| **Date Window (`withinLast` + `olderThan`)** | **1.31M ops/s** | 0.76 µs | **0.67 µs** | 0.75 µs |
+| **`checkRule()` (Full validation + execution trace)** | **715k ops/s** | 1.40 µs | **1.17 µs** | 1.63 µs |
+| **MongoDB Pushdown (`compileToMongo` with `$expr`)** | **4.22M compiles/s** | 0.24 µs | **0.08 µs** | 0.58 µs |
+| **SQL Pushdown (`compileToSQL` with Dynamic Fields)** | **1.69M compiles/s** | 0.59 µs | **0.46 µs** | 0.96 µs |
+
+---
+
+## Practical Takeaways
+
+### 1. `compileRule()` vs `evaluate()`
+If you evaluate the same rule repeatedly (for instance, inside an Express route, a Next.js action, or a stream consumer), use `compileRule()` once when your service starts:
+
+```ts
+import { compileRule, rule } from "@qarar/sdk";
+
+// Compile once at startup
+const isVipEligible = compileRule(
+  rule("VIP Policy")
+    .where("user.age").gte(18)
+    .and("user.tier").in(["vip", "platinum"])
+    .build()
+);
+
+// Runs in ~80 nanoseconds on the hot path (6M+ ops/sec)
+app.post("/checkout", (req, res) => {
+  const eligible = isVipEligible(req.body);
+  // ...
+});
+```
+
+`compileRule()` builds a direct JavaScript closure from your rule tree. This skips walking the AST object on every call and gives you an extra 15% to 20% throughput.
+
+### 2. Large Datasets (100,000 Records)
+When filtering an array of 100,000 JSON records in memory:
+- Total time to evaluate all 100,000 items: **~34.5 milliseconds**.
+- Memory: The runner monitors heap usage before and after. Because evaluation reads properties directly without creating new objects per check, heap memory stays flat with no GC pauses.
+
+### 3. Array & Date Checks
+- **Array operations** (`arrayContains`, `some`, `every`, `length`): Average **0.27 µs**. The engine iterates through the target array directly and stops as soon as a condition matches or fails.
+- **Date comparisons**: Average **0.76 µs**. The engine converts ISO 8601 strings and Epoch numbers to UTC milliseconds and does numeric subtraction. No heavy date libraries or polyfills are loaded.
+- **Two-sided dynamic fields** (`{{ customer.creditLimit }}`): Average **0.55 µs**. The engine resolves both field paths on the incoming payload in a single lookup pass.
+
+### 4. Database Pushdown
+Translating a rule AST into a SQL `WHERE` string or a MongoDB query object takes under 1 microsecond. You can compile rules on the fly before querying your database without caching the query string.
+
+---
+
+## Run the Benchmarks Locally
+
+You can run the exact benchmark suite on your own machine:
+
+```bash
+# Clone the repository
+git clone https://github.com/mshehata-dev/qarar.git
+cd qarar
+pnpm install
+pnpm build
+
+# Run in-memory microbenchmarks (100k iterations per test)
+pnpm --filter @qarar/benchmark bench:micro
+
+# Run 100,000-row dataset stress test
+pnpm --filter @qarar/benchmark bench:dataset
+
+# Run decision table multi-branch benchmark
+pnpm --filter @qarar/benchmark bench:decision
+```

@@ -1,4 +1,4 @@
-import type { RuleNode, ValueNode } from "@qarar/spec";
+import { type RuleNode, type ValueNode, extractFieldPath, parseDynamicFieldExpression } from "@qarar/spec";
 
 // ---------------------------------------------------------------------------
 // Trace types
@@ -47,6 +47,77 @@ function resolvePath(data: Record<string, unknown>, path: string): unknown {
 }
 
 // ---------------------------------------------------------------------------
+// Date & Duration Parsing Helpers (Zero Dependency UTC / Epoch)
+// ---------------------------------------------------------------------------
+
+function parseDateMs(val: unknown): number | null {
+  if (typeof val === "number" && !Number.isNaN(val)) {
+    return val;
+  }
+  if (typeof val === "string") {
+    const parsed = Date.parse(val);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  if (val instanceof Date) {
+    return val.getTime();
+  }
+  return null;
+}
+
+function parseDurationMs(durationStr: unknown): number | null {
+  if (typeof durationStr === "number" && !Number.isNaN(durationStr)) return durationStr;
+  if (typeof durationStr !== "string") return null;
+
+  const match = durationStr.trim().toLowerCase().match(/^(\d+(?:\.\d+)?)\s*([a-z]+)?$/);
+  if (!match) return null;
+
+  const amount = parseFloat(match[1]);
+  const unit = match[2] || "ms";
+
+  switch (unit) {
+    case "s":
+    case "sec":
+    case "second":
+    case "seconds":
+      return amount * 1000;
+    case "m":
+    case "min":
+    case "minute":
+    case "minutes":
+      return amount * 60 * 1000;
+    case "h":
+    case "hr":
+    case "hour":
+    case "hours":
+      return amount * 3600 * 1000;
+    case "d":
+    case "day":
+    case "days":
+      return amount * 86400 * 1000;
+    case "w":
+    case "wk":
+    case "week":
+    case "weeks":
+      return amount * 7 * 86400 * 1000;
+    case "mo":
+    case "month":
+    case "months":
+      return amount * 30 * 86400 * 1000;
+    case "y":
+    case "yr":
+    case "year":
+    case "years":
+      return amount * 365 * 86400 * 1000;
+    case "ms":
+    case "millisecond":
+    case "milliseconds":
+      return amount;
+    default:
+      return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Value resolution
 // ---------------------------------------------------------------------------
 
@@ -54,7 +125,22 @@ function resolveValue(node: ValueNode, data: Record<string, unknown>): unknown {
   switch (node.type) {
     case "field":
       return resolvePath(data, node.path);
-    case "string":
+    case "string": {
+      const parsed = parseDynamicFieldExpression(node.value);
+      if (parsed) {
+        const base = resolvePath(data, parsed.path);
+        if (parsed.offsetOperator && parsed.offsetDuration) {
+          const baseMs = parseDateMs(base);
+          const offsetMs = parseDurationMs(parsed.offsetDuration);
+          if (baseMs !== null && offsetMs !== null) {
+            const adjustedMs = parsed.offsetOperator === "+" ? baseMs + offsetMs : baseMs - offsetMs;
+            return new Date(adjustedMs).toISOString();
+          }
+        }
+        return base;
+      }
+      return node.value;
+    }
     case "number":
     case "boolean":
       return node.value;
@@ -66,7 +152,13 @@ function resolveValue(node: ValueNode, data: Record<string, unknown>): unknown {
 }
 
 function fieldLabel(node: ValueNode): string {
-  return node.type === "field" ? node.path : JSON.stringify((node as { value?: unknown }).value ?? null);
+  if (node.type === "field") return node.path;
+  if (node.type === "string") {
+    const dynamicField = extractFieldPath(node.value);
+    if (dynamicField) return `{{ ${dynamicField} }}`;
+    return JSON.stringify(node.value);
+  }
+  return JSON.stringify((node as { value?: unknown }).value ?? null);
 }
 
 // ---------------------------------------------------------------------------
@@ -75,10 +167,16 @@ function fieldLabel(node: ValueNode): string {
 
 function compare(operator: string, left: unknown, right: unknown): boolean {
   switch (operator) {
-    case "eq":
+    case "eq": {
+      if (Array.isArray(left) || Array.isArray(right)) {
+        if (!Array.isArray(left) || !Array.isArray(right)) return false;
+        if (left.length !== right.length) return false;
+        return left.every((val, i) => val === right[i]);
+      }
       return left === right;
+    }
     case "neq":
-      return left !== right;
+      return !compare("eq", left, right);
     case "isNull":
       return left === null || left === undefined;
     case "isNotNull":
@@ -117,6 +215,68 @@ function compare(operator: string, left: unknown, right: unknown): boolean {
     case "notMatches":
       if (typeof left !== "string" || typeof right !== "string") return false;
       return !new RegExp(right, "i").test(left);
+
+    // Array Operations
+    case "arrayContains":
+      return Array.isArray(left) ? left.includes(right) : false;
+    case "notArrayContains":
+      return Array.isArray(left) ? !left.includes(right) : false;
+    case "arrayContainsAny": {
+      if (!Array.isArray(left)) return false;
+      const targets = Array.isArray(right) ? right : [right];
+      return targets.some((item) => left.includes(item));
+    }
+    case "arrayContainsAll": {
+      if (!Array.isArray(left)) return false;
+      const targets = Array.isArray(right) ? right : [right];
+      if (targets.length === 0) return true;
+      return targets.every((item) => left.includes(item));
+    }
+    case "arrayContainsNone": {
+      if (!Array.isArray(left)) return false;
+      const targets = Array.isArray(right) ? right : [right];
+      return !targets.some((item) => left.includes(item));
+    }
+    case "arrayIsEmpty":
+      return Array.isArray(left) && left.length === 0;
+    case "arrayIsNotEmpty":
+      return Array.isArray(left) && left.length > 0;
+    case "arrayLength":
+      return Array.isArray(left) && typeof right === "number" ? left.length === right : false;
+    case "arrayLengthGte":
+      return Array.isArray(left) && typeof right === "number" ? left.length >= right : false;
+    case "arrayLengthLte":
+      return Array.isArray(left) && typeof right === "number" ? left.length <= right : false;
+    case "arrayLengthGt":
+      return Array.isArray(left) && typeof right === "number" ? left.length > right : false;
+    case "arrayLengthLt":
+      return Array.isArray(left) && typeof right === "number" ? left.length < right : false;
+
+    // Date & Time Operations
+    case "before": {
+      const l = parseDateMs(left);
+      const r = parseDateMs(right);
+      return l !== null && r !== null ? l < r : false;
+    }
+    case "after": {
+      const l = parseDateMs(left);
+      const r = parseDateMs(right);
+      return l !== null && r !== null ? l > r : false;
+    }
+    case "olderThan": {
+      const l = parseDateMs(left);
+      const dur = parseDurationMs(right);
+      if (l === null || dur === null) return false;
+      return (Date.now() - l) > dur;
+    }
+    case "withinLast": {
+      const l = parseDateMs(left);
+      const dur = parseDurationMs(right);
+      if (l === null || dur === null) return false;
+      const now = Date.now();
+      return l <= now && (now - l) <= dur;
+    }
+
     default:
       throw new Error(`Unknown operator: ${operator}`);
   }
@@ -197,4 +357,3 @@ export function evaluate(
 }
 
 export { evaluateDecisionTable, type DecisionTableResult, type BranchEvaluation } from "./decisionTable.js";
-

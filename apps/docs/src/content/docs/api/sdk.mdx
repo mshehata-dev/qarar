@@ -17,17 +17,18 @@ pnpm add @qarar/sdk
 
 | Function | Signature | Description |
 | :--- | :--- | :--- |
-| **[`rule(nameOrId?)`](/api/fluent-builder/)** | `(nameOrId?: string) => RuleBuilder` | Starts building a dynamic rule AST using fluent chainable methods. |
-| **[`switchRule(nameOrId?)`](/api/fluent-builder/)** | `<T>(nameOrId?: string) => DecisionTableBuilder<T>` | Starts building a multi-branch decision table matrix. |
-| **[`checkRule(rule, data, opts?)`](/api/engine-and-check/)** | `(rule: Rule, data: unknown) => CheckRuleResult` | All-in-one validator, evaluator, and human-readable explanation generator. |
-| **[`compileRule(rule)`](/api/engine-and-check/)** | `(rule: Rule) => (data: unknown) => boolean` | Compiles a rule into an optimized closure executing at **~3.5M ops/sec**. |
-| **[`evaluate(rule, data)`](/api/engine-and-check/)** | `(rule: Rule, data: unknown) => EvaluationResult` | Evaluates a rule against data and returns the raw `TraceEntry[]` tree. |
+| **[`rule(nameOrId?)`](/getting-started/quickstart/)** | `(nameOrId?: string) => RuleBuilder` | Starts building a dynamic rule AST using fluent chainable methods. |
+| **[`field(path)`](/concepts/engine-and-evaluation/#7-dynamic-two-sided-field-comparisons--fieldpath-)** | `(path: string) => ValueNode` | Creates a dynamic field reference node for dynamic two-sided comparisons. |
+| **[`switchRule(nameOrId?)`](/concepts/decision-tables-switch-cases/)** | `<T>(nameOrId?: string) => DecisionTableBuilder<T>` | Starts building a multi-branch decision table matrix. |
+| **[`checkRule(rule, data, opts?)`](/concepts/engine-and-evaluation/#5-all-in-one-validator-checkrule)** | `(rule: Rule, data: unknown) => CheckRuleResult` | All-in-one validator, evaluator, and human-readable explanation generator. |
+| **[`compileRule(rule)`](/concepts/engine-and-evaluation/#3-pre-compiled-closures-compilerule)** | `(rule: Rule) => (data: unknown) => boolean` | Compiles a rule into an optimized closure executing at **~6.2M ops/sec**. |
+| **[`evaluate(rule, data)`](/concepts/engine-and-evaluation/#4-deep-inspection-evaluate)** | `(rule: Rule, data: unknown) => EvaluationResult` | Evaluates a rule against data and returns the raw `TraceEntry[]` tree. |
 | **[`evaluateDecisionTable(table, data)`](/concepts/decision-tables-switch-cases/)** | `<T>(table: DecisionTable<T>, data: unknown) => DecisionResult<T>` | Evaluates an input payload against a decision table matrix. |
-| **[`compileToSQL(rule, opts?)`](/api/database-compilers/)** | `(rule: Rule, opts?: SQLOptions) => { sql: string }` | Compiles a rule AST into a SQL `WHERE` clause at **~640k compiles/sec**. |
-| **[`compileToMongo(rule)`](/api/database-compilers/)** | `(rule: Rule) => { filter: Record<string, unknown> }` | Compiles a rule AST into a MongoDB query filter at **~1.33M compiles/sec**. |
-| **[`explainFailures(trace)`](/concepts/explainability/)** | `(trace: TraceEntry[]) => string[]` | Formats failed condition trace entries into human-readable strings. |
-| **[`validateRule(json)`](/concepts/ast-specification/)** | `(input: unknown) => { valid: boolean; errors?: string[] }` | Validates an untrusted JSON object against the strict Qarar rule schema. |
-| **[`createQarar(schema)`](/api/schema-validation/)** | `<T>(schema: SchemaLike<T>) => SchemaBoundQarar<T>` | Binds rule execution to a domain schema validator for runtime payload validation. |
+| **[`compileToSQL(rule, opts?)`](/concepts/database-pushdown/)** | `(rule: Rule, opts?: SQLOptions) => { sql: string }` | Compiles a rule AST into a SQL `WHERE` clause at **~1.69M compiles/sec**. |
+| **[`compileToMongo(rule)`](/concepts/database-pushdown/)** | `(rule: Rule) => { filter: Record<string, unknown> }` | Compiles a rule AST into a MongoDB query filter at **~4.22M compiles/sec**. |
+| **[`explainFailures(trace)`](/concepts/engine-and-evaluation/#1-evaluation-lifecycle)** | `(trace: TraceEntry[]) => string[]` | Formats failed condition trace entries into human-readable strings. |
+| **[`validateRule(json)`](/concepts/engine-and-evaluation/)** | `(input: unknown) => { valid: boolean; errors?: string[] }` | Validates an untrusted JSON object against the strict Qarar rule schema. |
+| **[`createQarar(schema)`](/concepts/engine-and-evaluation/#8-strict-type-safety--edge-cases)** | `<T>(schema: SchemaLike<T>) => SchemaBoundQarar<T>` | Binds rule execution to a domain schema validator for runtime payload validation. |
 
 ---
 

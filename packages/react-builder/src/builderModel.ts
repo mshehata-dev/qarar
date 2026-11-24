@@ -1,4 +1,4 @@
-import type { RuleNode, ComparisonOp } from "@qarar/spec";
+import { type RuleNode, type ComparisonOp, extractFieldPath } from "@qarar/spec";
 
 export type AllOp =
   | ComparisonOp
@@ -10,7 +10,23 @@ export type AllOp =
   | "matches"
   | "notMatches"
   | "isNull"
-  | "isNotNull";
+  | "isNotNull"
+  | "arrayContains"
+  | "notArrayContains"
+  | "arrayContainsAny"
+  | "arrayContainsAll"
+  | "arrayContainsNone"
+  | "arrayIsEmpty"
+  | "arrayIsNotEmpty"
+  | "arrayLength"
+  | "arrayLengthGte"
+  | "arrayLengthLte"
+  | "arrayLengthGt"
+  | "arrayLengthLt"
+  | "before"
+  | "after"
+  | "olderThan"
+  | "withinLast";
 
 export interface BuilderComparison {
   kind: "comparison";
@@ -80,14 +96,16 @@ export function fromAST(node: RuleNode | null | undefined): BuilderNode {
   }
 
   const field = node.left && node.left.type === "field" ? node.left.path : "";
-  const raw = node.right;
+  const raw = (node as any).right;
 
   let value = "";
   if (raw && typeof raw === "object") {
-    if (raw.type === "string" || raw.type === "number" || raw.type === "boolean") {
+    if (raw.type === "field") {
+      value = `{{ ${raw.path} }}`;
+    } else if (raw.type === "string" || raw.type === "number" || raw.type === "boolean") {
       value = String(raw.value);
     } else if (raw.type === "array" && Array.isArray(raw.values)) {
-      value = raw.values.map((v) => (v && "value" in v ? String(v.value) : "")).join(", ");
+      value = raw.values.map((v: any) => (v && "value" in v ? String(v.value) : "")).join(", ");
     }
   }
 
@@ -100,12 +118,28 @@ export function fromAST(node: RuleNode | null | undefined): BuilderNode {
   };
 }
 
-function coerceScalar(value: string, fieldType: string) {
+function coerceScalar(value: string, fieldType?: string) {
   if (fieldType === "number") {
     const num = Number(value);
     return { type: "number" as const, value: Number.isNaN(num) ? 0 : num };
   }
-  if (fieldType === "boolean") return { type: "boolean" as const, value: value === "true" };
+  if (fieldType === "boolean") return { type: "boolean" as const, value: value.trim().toLowerCase() === "true" };
+  if (fieldType === "string") return { type: "string" as const, value };
+
+  // Dynamic auto-coercion when no rigid schema is enforced
+  const trimmed = value.trim();
+  if (trimmed.toLowerCase() === "true" || trimmed.toLowerCase() === "false") {
+    return { type: "boolean" as const, value: trimmed.toLowerCase() === "true" };
+  }
+  if (trimmed !== "" && !Number.isNaN(Number(trimmed)) && !trimmed.startsWith("0x")) {
+    return { type: "number" as const, value: Number(trimmed) };
+  }
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return { type: "string" as const, value: trimmed.slice(1, -1) };
+  }
   return { type: "string" as const, value };
 }
 
@@ -134,7 +168,7 @@ export function toAST(
     } as RuleNode;
   }
 
-  const fieldType = fieldTypeMap[node.field] ?? "string";
+  const fieldType = fieldTypeMap[node.field];
   const leftNode = { type: "field" as const, path: node.field || "" };
 
   if (node.operator === "between") {
@@ -148,8 +182,23 @@ export function toAST(
     };
   }
 
-  if (node.operator === "in" || node.operator === "notIn") {
-    const rawItems = (node.value || "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (
+    node.operator === "in" ||
+    node.operator === "notIn" ||
+    node.operator === "arrayContainsAny" ||
+    node.operator === "arrayContainsAll" ||
+    node.operator === "arrayContainsNone"
+  ) {
+    const rawVal = (node.value || "").trim();
+    const dynamicField = extractFieldPath(rawVal);
+    if (dynamicField) {
+      return {
+        type: node.operator,
+        left: leftNode,
+        right: { type: "field" as const, path: dynamicField },
+      };
+    }
+    const rawItems = rawVal.split(",").map((s) => s.trim()).filter(Boolean);
     const values =
       rawItems.length > 0
         ? rawItems.map((item) => coerceScalar(item, fieldType))
@@ -161,7 +210,12 @@ export function toAST(
     };
   }
 
-  if (node.operator === "isNull" || node.operator === "isNotNull") {
+  if (
+    node.operator === "isNull" ||
+    node.operator === "isNotNull" ||
+    node.operator === "arrayIsEmpty" ||
+    node.operator === "arrayIsNotEmpty"
+  ) {
     return {
       type: node.operator,
       left: leftNode,
@@ -169,9 +223,24 @@ export function toAST(
     };
   }
 
+  // Check if right side is a dynamic field {{ field.path }}
+  const rawVal = (node.value || "").trim();
+  const dynamicField = extractFieldPath(rawVal);
+  const isLengthOp =
+    node.operator === "arrayLength" ||
+    node.operator === "arrayLengthGte" ||
+    node.operator === "arrayLengthLte" ||
+    node.operator === "arrayLengthGt" ||
+    node.operator === "arrayLengthLt";
+  const effectiveFieldType = isLengthOp ? "number" : fieldType;
+
+  const rightNode = dynamicField
+    ? { type: "field" as const, path: dynamicField }
+    : coerceScalar(node.value || "", effectiveFieldType);
+
   return {
     type: (node.operator as ComparisonOp) || "eq",
     left: leftNode,
-    right: coerceScalar(node.value || "", fieldType),
+    right: rightNode,
   } as RuleNode;
 }

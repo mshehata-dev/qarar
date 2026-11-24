@@ -1,81 +1,103 @@
 ---
-title: E-Commerce Promotional Discounts Recipe
-description: Build dynamic cart discount rules, explain checkout eligibility in user banners, and push rules to SQL for email marketing blasts.
+title: "E-Commerce Pricing Matrix"
+description: "Compute dynamic checkout discounts, promotional coupon tiers, and shipping perks using @qarar/sdk switchRule."
 ---
 
-import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+In modern e-commerce checkout funnels, discount rates and shipping perks vary dynamically according to customer loyalty tiers, order values, and geographical regions.
 
-E-commerce promotional rules change frequently during sales campaigns, Black Friday events, and seasonal clearances.
-
-This recipe demonstrates how to define a multi-condition promotional discount rule, evaluate checkout carts, return user-friendly failure explanations, and push the rule to SQL to query eligible customers for email campaigns.
+Using Qarar's `switchRule()`, you can structure multi-branch pricing tables as clean, human-readable decision matrices.
 
 ---
 
-## 1. Defining the Discount Rule
-
-A promotional rule requiring:
-- Customer age $\ge 18$
-- Customer loyalty tier is `"vip"` or `"platinum"`
-- Cart subtotal $\ge \$100$
-- At least 2 items in cart
+## 1. Defining the Pricing Matrix
 
 ```ts
-import { rule, checkRule, compileToSQL } from "@qarar/sdk";
+// src/rules/checkoutPricing.ts
+import { switchRule, rule, checkDecisionTable } from "@qarar/sdk";
 
-export const vipHolidayPromo = rule("VIP Holiday Promotion")
-  .id("promo_holiday_vip_2026")
-  .where("customer.age").gte(18)
-  .and("customer.tier").in(["vip", "platinum"])
-  .and("cart.subtotal").gte(100)
-  .and("cart.itemCount").gte(2)
+export interface PricingOutput {
+  discountPercent: number;
+  freeShipping: boolean;
+  tierLabel: string;
+}
+
+export const checkoutPricingMatrix = switchRule<PricingOutput>("Customer Checkout Matrix")
+  .id("checkout-pricing-matrix-v1")
+  // Case 1: VIP customers spending $200+
+  .case(
+    "vip-high-value",
+    rule().where("customer.tier").eq("vip").and("cart.total").gte(200)
+  )
+  .then({ discountPercent: 25, freeShipping: true, tierLabel: "VIP Platinum" })
+
+  // Case 2: VIP customers spending under $200
+  .case(
+    "vip-standard",
+    rule().where("customer.tier").eq("vip")
+  )
+  .then({ discountPercent: 15, freeShipping: true, tierLabel: "VIP Gold" })
+
+  // Case 3: Regular customers spending $150+
+  .case(
+    "regular-high-value",
+    rule().where("cart.total").gte(150)
+  )
+  .then({ discountPercent: 10, freeShipping: true, tierLabel: "Volume Shopper" })
+
+  // Case 4: Default fallback
+  .default({ discountPercent: 0, freeShipping: false, tierLabel: "Standard" })
   .build();
 ```
 
 ---
 
-## 2. In-Memory Checkout Validation
+## 2. Checkout Evaluation
 
-When a user views their shopping bag or proceeds to checkout, evaluate their session:
+Evaluate the incoming shopping cart during checkout calculation:
 
 ```ts
-const cartSession = {
-  customer: { age: 24, tier: "silver" },
-  cart: { subtotal: 149.99, itemCount: 3 },
-};
+// src/services/checkoutService.ts
+import { checkDecisionTable } from "@qarar/sdk";
+import { checkoutPricingMatrix, PricingOutput } from "../rules/checkoutPricing";
 
-const check = checkRule(vipHolidayPromo, cartSession);
+export function calculateCartTotal(cart: { total: number }, customer: { tier: string }) {
+  const context = { cart, customer };
 
-if (check.result) {
-  // Apply 20% discount
-  console.log("Applied discount: $", (cartSession.cart.subtotal * 0.2).toFixed(2));
-} else {
-  // Show user why discount did not apply
-  console.log("Promo not applied:", check.reasons);
-  // ➔ ['customer.tier: "silver" is not in [vip, platinum]']
+  const decision = checkDecisionTable(checkoutPricingMatrix, context);
+  const pricing: PricingOutput = decision.output;
+
+  const discountAmount = (cart.total * pricing.discountPercent) / 100;
+  const finalTotal = cart.total - discountAmount;
+  const shippingFee = pricing.freeShipping ? 0 : 9.99;
+
+  return {
+    matchedBranch: decision.matchedBranch?.id,
+    tierLabel: pricing.tierLabel,
+    subtotal: cart.total,
+    discountPercent: pricing.discountPercent,
+    discountAmount,
+    shippingFee,
+    finalTotal: finalTotal + shippingFee,
+  };
 }
 ```
 
----
-
-## 3. Database Pushdown for Marketing Campaigns
-
-To send targeted promotional emails to all qualifying customers in your database, don't fetch all customers into Node.js memory. Compile the rule directly to a SQL `WHERE` clause:
+### Execution Example
 
 ```ts
-const { sql } = compileToSQL(vipHolidayPromo, { columnStyle: "snake" });
-
-console.log(sql);
-/*
-➔ customer_age >= 18 
-  AND customer_tier IN ('vip', 'platinum') 
-  AND cart_subtotal >= 100 
-  AND cart_item_count >= 2
-*/
-
-// Execute query with PostgreSQL / MySQL
-const recipients = await db.query(
-  `SELECT id, email, first_name FROM customers WHERE ${sql}`
+const result = calculateCartTotal(
+  { total: 250 },
+  { tier: "vip" }
 );
 
-console.log(`Found ${recipients.rowCount} eligible customers for marketing blast.`);
+console.log(result);
+// {
+//   matchedBranch: 'vip-high-value',
+//   tierLabel: 'VIP Platinum',
+//   subtotal: 250,
+//   discountPercent: 25,
+//   discountAmount: 62.5,
+//   shippingFee: 0,
+//   finalTotal: 187.5
+// }
 ```

@@ -60,6 +60,24 @@ export const COMPARISON_OPERATORS = [
   "endsWith",
   "matches",
   "notMatches",
+  // Array Operations
+  "arrayContains",
+  "notArrayContains",
+  "arrayContainsAny",
+  "arrayContainsAll",
+  "arrayContainsNone",
+  "arrayIsEmpty",
+  "arrayIsNotEmpty",
+  "arrayLength",
+  "arrayLengthGte",
+  "arrayLengthLte",
+  "arrayLengthGt",
+  "arrayLengthLt",
+  // Date & Time Operations
+  "before",
+  "after",
+  "olderThan",
+  "withinLast",
 ] as const;
 
 export type ComparisonOp = (typeof COMPARISON_OPERATORS)[number];
@@ -453,3 +471,52 @@ export const DecisionBranchSchema = {
     return input as unknown as DecisionBranch<T>;
   },
 };
+
+// ---------------------------------------------------------------------------
+// Dynamic Field Expression Helpers ({{ field.path }})
+// ---------------------------------------------------------------------------
+
+export interface DynamicFieldExpression {
+  path: string;
+  offsetOperator?: "+" | "-";
+  offsetDuration?: string;
+}
+
+/**
+ * Checks if a string matches the {{ field.path }} syntax (with optional offset like {{ date + 14 days }}).
+ */
+export function isFieldExpression(val: unknown): val is string {
+  return typeof val === "string" && /^{{\s*[\w.-]+(?:\s*[+-]\s*[\w\s.]+)?\s*}}$/.test(val.trim());
+}
+
+/**
+ * Extracts field path from {{ field.path }} or returns null if not an expression.
+ */
+export function extractFieldPath(val: unknown): string | null {
+  if (typeof val !== "string") return null;
+  const match = val.trim().match(/^{{\s*([\w.-]+)(?:\s*[+-]\s*[\w\s.]+)?\s*}}$/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Parses full dynamic expression including optional date/time offset.
+ * Example: "{{ subscription.startDate + 14 days }}" -> { path: "subscription.startDate", offsetOperator: "+", offsetDuration: "14 days" }
+ */
+export function parseDynamicFieldExpression(val: unknown): DynamicFieldExpression | null {
+  if (typeof val !== "string") return null;
+  const match = val.trim().match(/^{{\s*([\w.-]+)(?:\s*([+-])\s*([\w\s.]+))?\s*}}$/);
+  if (!match) return null;
+  return {
+    path: match[1],
+    offsetOperator: match[2] as "+" | "-" | undefined,
+    offsetDuration: match[3] ? match[3].trim() : undefined,
+  };
+}
+
+/**
+ * Wraps a field path into canonical {{ field.path }} format.
+ */
+export function formatFieldExpression(path: string): string {
+  return `{{ ${path.trim()} }}`;
+}
+

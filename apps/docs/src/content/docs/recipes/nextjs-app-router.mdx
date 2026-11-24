@@ -1,69 +1,91 @@
 ---
-title: Next.js App Router & Server Actions
-description: Enforce dynamic business rules in Next.js Server Actions, Route Handlers, and Edge Middleware.
+title: "Next.js Server & Client"
+description: "Protect Server Actions, Route Handlers, and render dynamic conditional UI in Next.js 14+ with @qarar/sdk."
 ---
 
-import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-Qarar contains zero platform-specific C++ dependencies, making it 100% compatible with the Next.js App Router, Server Actions, and Edge Runtime isolates (V8 / Cloudflare Workers).
+Next.js App Router allows you to evaluate business rules across both server and client boundaries:
+1. **Server Actions & Route Handlers**: Guarantee secure backend authorization and business logic execution.
+2. **React Server Components (RSC)**: Conditionally render UI features before sending HTML to the client.
+3. **Client Components**: Provide real-time instant feedback before form submission.
 
 ---
 
-## 1. Route Handler Guard (`app/api/.../route.ts`)
+## 1. Route Handlers (`app/api/**/route.ts`)
+
+Protect API endpoints from unauthorized actions or invalid business payloads:
 
 ```ts
-import { NextResponse } from "next/server";
-import { checkRule, rule } from "@qarar/sdk";
+// app/api/payouts/route.ts
+import { NextResponse, type NextRequest } from "next/server";
+import { rule, checkRule } from "@qarar/sdk";
+import { getSession } from "@/lib/auth";
 
-// Define rule or fetch from DB/Redis
-const withdrawalLimitRule = rule("Daily Withdrawal Limit")
-  .where("user.kycVerified").eq(true)
-  .and("transaction.amount").lte(10000)
+// Define payout eligibility policy
+const payoutEligibilityRule = rule("Merchant Payout Gate")
+  .id("merchant-payout-gate")
+  .where("merchant.status").eq("active")
+  .and("merchant.kycVerified").eq(true)
+  .and("payout.amount").lte(50000)
+  .and("payout.currency").in(["USD", "EUR", "GBP"])
   .build();
 
-export async function POST(request: Request) {
-  const body = await request.json();
+export async function POST(req: NextRequest) {
+  const session = await getSession();
+  if (!session?.merchant) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-  // Evaluate dynamic rule
-  const check = checkRule(withdrawalLimitRule, body);
+  const payload = await req.json();
 
-  if (!check.result) {
+  const context = {
+    merchant: session.merchant,
+    payout: payload,
+  };
+
+  const decision = checkRule(payoutEligibilityRule, context);
+
+  if (!decision.result) {
     return NextResponse.json(
       {
-        error: "Withdrawal rejected",
-        reasons: check.reasons,
+        error: "Forbidden",
+        message: "Payout request does not meet eligibility criteria",
+        reasons: decision.reasons,
       },
       { status: 403 }
     );
   }
 
-  // Proceed with withdrawal processing...
-  return NextResponse.json({ status: "processed" });
+  // Proceed with payout processing
+  return NextResponse.json({ status: "Payout Initiated", amount: payload.amount });
 }
 ```
 
 ---
 
-## 2. Server Action Guard (`"use server"`)
+## 2. Server Actions Protection
 
-Protect Next.js Server Actions directly in your React components:
+Validate business rules directly inside Server Actions before running database mutations:
 
 ```ts
+// app/actions/upgradePlan.ts
 "use server";
 
-import { checkRule, rule } from "@qarar/sdk";
-import { auth } from "@/lib/auth";
+import { rule, checkRule } from "@qarar/sdk";
+import { getCurrentUser } from "@/lib/session";
+import { db } from "@/lib/db";
 
-const discountRule = rule("Team Discount")
-  .where("org.memberCount").gte(10)
+const upgradeEligibilityRule = rule("Self-Service Upgrade Policy")
+  .where("account.hasOverdueInvoices").eq(false)
+  .and("account.seats").gte(1)
   .build();
 
-export async function applyTeamDiscountAction(orgId: string) {
-  const session = await auth();
-  if (!session) throw new Error("Unauthorized");
+export async function upgradeSubscription(targetPlan: string) {
+  const user = await getCurrentUser();
+  const account = await db.account.findUnique({ where: { id: user.accountId } });
 
-  const org = await db.org.findUnique({ where: { id: orgId } });
-  const check = checkRule(discountRule, { org });
+  const check = checkRule(upgradeEligibilityRule, { account });
 
   if (!check.result) {
     return {
@@ -72,7 +94,44 @@ export async function applyTeamDiscountAction(orgId: string) {
     };
   }
 
-  await db.org.update({ where: { id: orgId }, data: { hasDiscount: true } });
+  await db.account.update({
+    where: { id: account.id },
+    data: { plan: targetPlan },
+  });
+
   return { success: true };
+}
+```
+
+---
+
+## 3. Server Components Feature Flags
+
+Conditionally render UI components without shipping private rule criteria to the browser:
+
+```tsx
+// app/dashboard/page.tsx
+import { rule, checkRule } from "@qarar/sdk";
+import { getCurrentUser } from "@/lib/session";
+import { AdvancedAnalyticsWidget } from "@/components/AnalyticsWidget";
+import { UpgradePrompt } from "@/components/UpgradePrompt";
+
+const analyticsEntitlementRule = rule("Advanced Analytics Entitlement")
+  .where("user.role").eq("admin")
+  .or("account.plan").eq("enterprise")
+  .build();
+
+export default async function DashboardPage() {
+  const user = await getCurrentUser();
+  const context = { user, account: user.account };
+
+  const canViewAnalytics = checkRule(analyticsEntitlementRule, context).result;
+
+  return (
+    <main className="p-8">
+      <h1>Executive Dashboard</h1>
+      {canViewAnalytics ? <AdvancedAnalyticsWidget /> : <UpgradePrompt />}
+    </main>
+  );
 }
 ```

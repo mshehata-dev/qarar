@@ -104,10 +104,120 @@ if (!check.result) {
 
 ---
 
-## 6. Error & Null Safety
+## 6. Supported Operators
 
-Qarar ensures production resilience by gracefully handling unexpected data shapes:
+### Scalar & String Operators
 
-- **Missing Fields**: If a rule checks `"user.billing.card.expYear"` but the input object is `{ user: {} }`, Qarar does not throw an uncaught error. The condition safely evaluates against `undefined`.
-- **Type Mismatches**: Comparing a `string` against a `number` using `gte` safely returns `false` without crashing the process.
-- **Null Safety**: Dedicated `isNull` and `isNotNull` operators explicitly distinguish between `null`, `undefined`, and valid falsy values (`0`, `false`, `""`).
+| Operator | Type | Description | Example |
+| :--- | :--- | :--- | :--- |
+| **`eq`** | Binary | Strict equality (`===`) | `where("status").eq("active")` |
+| **`neq`** | Binary | Strict inequality (`!==`) | `where("role").neq("guest")` |
+| **`gt`** | Binary | Greater than (`>`) | `where("amount").gt(100)` |
+| **`gte`** | Binary | Greater or equal (`>=`) | `where("age").gte(18)` |
+| **`lt`** | Binary | Less than (`<`) | `where("riskScore").lt(50)` |
+| **`lte`** | Binary | Less or equal (`<=`) | `where("retries").lte(3)` |
+| **`in`** | Binary | Value included in array | `where("country").in(["US", "CA", "GB"])` |
+| **`notIn`** | Binary | Value excluded from array | `where("tier").notIn(["banned", "suspended"])` |
+| **`between`** | Ternary | Inclusive numeric range | `where("age").between(21, 65)` |
+| **`contains`** | Binary | Substring match | `where("title").contains("Pro")` |
+| **`startsWith`** | Binary | String prefix check | `where("sku").startsWith("PROMO-")` |
+| **`endsWith`** | Binary | String suffix check | `where("email").endsWith("@corp.com")` |
+| **`isNull`** | Unary | Value is `null` or `undefined` | `where("deletedAt").isNull()` |
+| **`isNotNull`** | Unary | Value is defined and not `null` | `where("verifiedAt").isNotNull()` |
+
+### Array Operators
+
+| Operator | Description | Example |
+| :--- | :--- | :--- |
+| **`arrayContains`** | Array contains specified value | `where("user.tags").arrayContains("vip")` |
+| **`notArrayContains`** | Array does not contain specified value | `where("user.flags").notArrayContains("blocked")` |
+| **`arrayContainsAny`** (`some`) | Array contains at least one of the target values | `where("user.permissions").arrayContainsAny(["admin", "billing"])` |
+| **`arrayContainsAll`** (`every`) | Array contains all of the target values | `where("account.features").arrayContainsAll(["sso", "audit_logs"])` |
+| **`arrayContainsNone`** (`none`) | Array contains none of the target values | `where("user.flags").arrayContainsNone(["banned", "suspended"])` |
+| **`arrayIsEmpty`** | Array has zero elements (`length === 0`) | `where("team.pendingInvites").arrayIsEmpty()` |
+| **`arrayIsNotEmpty`** | Array has one or more elements (`length > 0`) | `where("cart.items").arrayIsNotEmpty()` |
+| **`arrayLength`** | Array length strictly equals count | `where("cart.items").arrayLength(3)` |
+| **`arrayLengthGte`** | Array length is greater than or equal | `where("cart.items").arrayLengthGte(1)` |
+| **`arrayLengthLte`** | Array length is less than or equal | `where("order.attachments").arrayLengthLte(5)` |
+| **`arrayLengthGt`** | Array length is strictly greater | `where("team.members").arrayLengthGt(0)` |
+| **`arrayLengthLt`** | Array length is strictly less | `where("team.pendingInvites").arrayLengthLt(10)` |
+
+### Date & Time Operators
+
+Supports ISO 8601 UTC strings (`"2026-01-15T00:00:00Z"`), Epoch timestamps, relative duration strings (`"30 days"`, `"12 hours"`, `"7 d"`, `"1 year"`), and dynamic field expressions with optional offsets (`"{{subscription.startDate + 14 days}}"`).
+
+| Operator | Description | Example |
+| :--- | :--- | :--- |
+| **`before`** | Timestamp is chronologically before target | `where("order.createdAt").before("2026-12-31")` |
+| **`after`** | Timestamp is chronologically after target | `where("user.verifiedAt").after("2026-01-01")` |
+| **`olderThan`** | Timestamp is older than relative duration | `where("user.registeredAt").olderThan("90 days")` |
+| **`withinLast`** | Timestamp falls within recent duration window | `where("event.timestamp").withinLast("24 hours")` |
+
+---
+
+## 7. Dynamic Two-Sided Field Comparisons (`{{ field.path }}`)
+
+In real-world business logic, rules frequently need to compare two dynamic attributes from the incoming payload rather than a static literal (e.g. `cart.total <= customer.creditLimit` or `requestedSeats <= venue.availableSeats`).
+
+### Canonical `{{ field.path }}` Standard
+
+Qarar adopts **`{{ field.path }}`** as the single canonical syntax for referencing dynamic fields:
+- **Universal Clarity**: Standardized across developer tools (Jinja, Handlebars, Retool) and non-technical LiveOps / CMS workflows (Shopify Liquid, Mailchimp merge tags).
+- **Ambiguity-Free**: Avoids collision with hashtags, hex codes (`#1024`, `#FFFFFF`), or CSS selectors.
+- **Bi-directional**: Supported transparently across the Fluent TypeScript SDK, the Visual React Builder, in-memory execution, and SQL/MongoDB database compilers.
+
+### Two-Sided Date Comparisons & Subscription Offsets
+
+Dynamic field comparisons apply seamlessly to date and time fields, allowing automated verification of subscription trial periods, payment dates, and SLA compliance:
+
+```ts
+import { rule, field, evaluate } from "@qarar/sdk";
+
+// 1. Direct two-sided date comparison:
+const trialRule = rule("Active Trial Check")
+  .where("subscription.paymentDate")
+  .before("{{subscription.trialEndsAt}}") // Or: .before(field("subscription.trialEndsAt"))
+  .build();
+
+// 2. Dynamic date with duration offset (+14 days free trial offer):
+const offerRule = rule("Offer Verification")
+  .where("subscription.endDate")
+  .after("{{subscription.startDate + 14 days}}")
+  .build();
+
+const result = evaluate(offerRule, {
+  subscription: {
+    startDate: "2026-11-01T00:00:00Z",
+    endDate: "2026-11-20T00:00:00Z"
+  }
+});
+// ➔ result: true (evaluated in 0.48 µs)
+```
+
+```ts
+import { rule, evaluate } from "@qarar/sdk";
+
+// Using the SDK builder:
+const creditRule = rule("Credit Limit Check")
+  .where("cart.total")
+  .lte("{{customer.creditLimit}}") // Or: .lte(field("customer.creditLimit"))
+  .build();
+
+// Evaluates in 0.46 µs:
+const result = evaluate(creditRule, {
+  cart: { total: 450 },
+  customer: { creditLimit: 500 }
+});
+// ➔ result: true
+```
+
+---
+
+## 8. Strict Type Safety & Edge Cases
+
+JavaScript is infamous for loose type coercion pitfalls (e.g. `[] == false`, `"10" < "2"`). Qarar strictly prevents these failure modes:
+
+- **Strict Equality (`eq`)**: Comparing an array with a scalar or string strictly yields `false`. Two arrays are compared by content elements, not reference address.
+- **Strict Numeric Comparisons (`gt`, `gte`, `lt`, `lte`)**: Both sides must strictly resolve to valid finite numbers. Comparing a string with a number or an array with a number gracefully evaluates to `false` without throwing an exception.
+- **Graceful Null & Undefined Handling**: If a referenced dynamic field (`{{customer.creditLimit}}`) does not exist on the payload, the comparison safely fails (`false`) without crashing the execution loop.
+- **Prototype Pollution Prevention**: Direct access to `__proto__`, `prototype`, or `constructor` keys is strictly blocked at the AST and engine resolution level.

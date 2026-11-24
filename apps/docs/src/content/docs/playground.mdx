@@ -1,15 +1,11 @@
 ---
-title: Interactive Rule Studio
-description: Author business rules visually or via JSON AST, test live payloads, inspect execution traces, and compile queries.
+title: "Live Rule Sandbox"
+description: "Visually author business rules, test live payloads, inspect execution traces, and compile SQL and MongoDB pushdown queries in real time."
 ---
 
 import InteractivePlayground from '../../components/InteractivePlayground';
 
-Visually author business rules & decision tables, test live mock payloads, inspect plain-English failure reasons, and compile database pushdown queries.
-
-:::tip[Zero-Deploy Business Logic]
-Save this JSON AST directly in your database (PostgreSQL `jsonb`, MongoDB, or Redis). Update your business rules live in production without modifying source code or redeploying servers!
-:::
+Test rule evaluation in real time. Select a preset or create a custom rule, test live payloads, inspect plain-English failure reasons, and compile database pushdown queries.
 
 <div className="not-content playground-container">
   <InteractivePlayground client:only="react" />

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   rule,
   switchRule,
@@ -10,9 +10,11 @@ import {
   type RuleNode,
   type DecisionTable,
   type TraceEntry,
+  field,
 } from "@qarar/sdk";
-import { RuleBuilder } from "@qarar/react-builder";
-import { getThemeTokens, qararTokens, type QararTheme } from "@qarar/theme";
+import { extractFieldPath } from "@qarar/spec";
+import { RuleBuilder, DecisionTableBuilder } from "@qarar/react-builder";
+import { getThemeTokens, qararTokens, cssVarTokens, type QararTheme } from "@qarar/theme";
 
 // ---------------------------------------------------------------------------
 // Presets Definition
@@ -40,10 +42,10 @@ interface Preset {
 const PRESETS: Preset[] = [
   {
     id: "ecommerce",
-    title: "🛒 E-Commerce VIP Discount Gate",
+    title: "E-Commerce VIP Discount",
     category: "E-Commerce",
     badgeColor: qararTokens.dark.primary,
-    description: "Grants 20% discount if customer is 18+, on a VIP/Premium plan, and cart exceeds $100.",
+    description: "Grants 20% discount if customer is 18+, on a VIP or Premium plan, and cart exceeds $100.",
     rule: rule("VIP Discount Gate")
       .id("discount-v1")
       .where("customer.age")
@@ -64,11 +66,70 @@ const PRESETS: Preset[] = [
     ],
   },
   {
+    id: "dynamic-fields-arrays",
+    title: "Dynamic {{ Field }} & Array Operations",
+    category: "FinTech",
+    badgeColor: qararTokens.dark.accent,
+    description: "Evaluates dynamic field-to-field comparison (cart.total <= {{customer.creditLimit}}), array membership (tags), and date withinLast.",
+    rule: rule("Dynamic Credit & Trial Policy")
+      .id("credit-trial-policy")
+      .where("cart.total").lte(field("customer.creditLimit"))
+      .and("user.tags").arrayContains("verified-buyer")
+      .and("user.registeredAt").withinLast("90 days")
+      .build(),
+    sampleData: {
+      cart: { total: 450 },
+      customer: { creditLimit: 1000 },
+      user: {
+        tags: ["verified-buyer", "newsletter-subscriber"],
+        registeredAt: new Date(Date.now() - 15 * 86400 * 1000).toISOString(),
+      },
+    },
+    fields: [
+      { path: "cart.total", label: "Cart Total ($)", type: "number" },
+      { path: "customer.creditLimit", label: "Credit Limit ($)", type: "number" },
+      { path: "user.tags", label: "User Tags", type: "string" },
+      { path: "user.registeredAt", label: "Registration Date", type: "string" },
+    ],
+  },
+  {
+    id: "saas-subscription-dates",
+    title: "SaaS Subscription & Two-Sided Dates",
+    category: "SaaS",
+    badgeColor: qararTokens.dark.primary,
+    description: "Evaluates two-sided date comparisons (paymentDate before trialEndsAt), duration offsets, and array set operations (all/any).",
+    rule: rule("SaaS Free Trial & Plan Policy")
+      .id("saas-trial-policy")
+      .where("subscription.paymentDate").before(field("subscription.trialEndsAt"))
+      .and("account.features").arrayContainsAll(["sso", "audit_logs"])
+      .and("account.members").arrayLengthGte(5)
+      .build(),
+    sampleData: {
+      subscription: {
+        startDate: "2026-11-01T00:00:00Z",
+        trialEndsAt: "2026-11-20T00:00:00Z",
+        paymentDate: "2026-11-15T00:00:00Z",
+        plan: "enterprise",
+      },
+      account: {
+        features: ["sso", "audit_logs", "custom_domains"],
+        members: ["alice", "bob", "carol", "dave", "eve"],
+      },
+    },
+    fields: [
+      { path: "subscription.startDate", label: "Start Date", type: "string" },
+      { path: "subscription.trialEndsAt", label: "Trial End Date", type: "string" },
+      { path: "subscription.paymentDate", label: "Payment Date", type: "string" },
+      { path: "account.features", label: "Account Features", type: "string" },
+      { path: "account.members", label: "Team Members", type: "string" },
+    ],
+  },
+  {
     id: "decision-matrix",
-    title: "🔀 Pricing Tier Switch Matrix",
+    title: "Pricing Tier Switch Matrix",
     category: "Decision Table",
     badgeColor: qararTokens.dark.accent,
-    description: "Dynamic switch case evaluating customer tier & cart total to return specific discount & shipping perks.",
+    description: "Dynamic switch case evaluating customer tier and cart total to return specific discount and shipping perks.",
     isDecisionTable: true,
     decisionTable: switchRule<{ discountPercent: number; freeShipping: boolean; tierLabel: string }>("Customer Pricing Matrix")
       .id("pricing-tier-matrix")
@@ -91,10 +152,10 @@ const PRESETS: Preset[] = [
   },
   {
     id: "fintech",
-    title: "🛡️ FinTech Risk & Fraud Assessment",
+    title: "FinTech Risk & Fraud Gate",
     category: "FinTech",
     badgeColor: qararTokens.dark.fail,
-    description: "Flags high-value transactions (> $5,000) when the user is unverified or located in a flagged region.",
+    description: "Flags high-value transactions (> $5,000) when user is unverified or located in a flagged country.",
     rule: rule("High Value Fraud Gate")
       .id("risk-gate-v1")
       .where("transaction.amount")
@@ -120,10 +181,10 @@ const PRESETS: Preset[] = [
   },
   {
     id: "saas",
-    title: "🚀 SaaS Enterprise Feature Gate",
+    title: "SaaS Feature Entitlements",
     category: "SaaS",
     badgeColor: qararTokens.dark.pass,
-    description: "Unlocks advanced analytics for Admins, or Enterprise accounts with 50 or fewer seats.",
+    description: "Unlocks advanced analytics for Admins, or Enterprise accounts with 50 or fewer active seats.",
     rule: rule("Analytics Entitlement Gate")
       .id("entitlement-analytics")
       .where("user.role")
@@ -149,10 +210,10 @@ const PRESETS: Preset[] = [
   },
   {
     id: "hipaa",
-    title: "🔒 Medical Privacy & Consent Gate",
+    title: "Healthcare HIPAA Consent",
     category: "Healthcare",
     badgeColor: qararTokens.dark.warn,
-    description: "Grants access if patient consent is verified, age >= 21, and data region matches 'EU' or 'US'.",
+    description: "Verifies patient consent, age 21+, and data residency in approved regions (EU or US).",
     rule: rule("Medical Privacy Gate")
       .id("privacy-hipaa-v1")
       .where("patient.consentGiven")
@@ -174,10 +235,10 @@ const PRESETS: Preset[] = [
   },
   {
     id: "airline",
-    title: "✈️ Loyalty Lounge Upgrade Gate",
+    title: "Airline Lounge Upgrade",
     category: "Travel",
     badgeColor: qararTokens.dark.primaryLight,
-    description: "Qualifies passenger for lounge access if flight is International and flyer status is Gold or Platinum.",
+    description: "Grants lounge access if flight is International and flyer status is Gold or Platinum.",
     rule: rule("Lounge Access Gate")
       .id("loyalty-lounge-v1")
       .where("flight.isInternational")
@@ -200,35 +261,51 @@ const PRESETS: Preset[] = [
 // TS Code Generator Helper
 // ---------------------------------------------------------------------------
 
-function generateTSCode(node: RuleNode, indent = "  "): string {
+function generateTSCode(node?: RuleNode, indent = "  "): string {
+  if (!node || typeof node !== "object") return 'where("field").eq(true)';
   if (node.type === "and") {
-    const parts = node.conditions.map((c) => generateTSCode(c, `${indent}  `));
+    const parts = (node.conditions || []).map((c) => generateTSCode(c, `${indent}  `));
     return `and(\n${parts.map((p) => `${indent}  ${p}`).join(",\n")}\n${indent})`;
   }
   if (node.type === "or") {
-    const parts = node.conditions.map((c) => generateTSCode(c, `${indent}  `));
+    const parts = (node.conditions || []).map((c) => generateTSCode(c, `${indent}  `));
     return `or(\n${parts.map((p) => `${indent}  ${p}`).join(",\n")}\n${indent})`;
   }
   if (node.type === "not") {
     return `not(${generateTSCode(node.condition, indent)})`;
   }
   if (node.type === "between") {
-    const fieldPath = node.left.type === "field" ? node.left.path : "";
-    const minVal = "value" in node.min ? node.min.value : 0;
-    const maxVal = "value" in node.max ? node.max.value : 0;
+    const fieldPath = node.left && node.left.type === "field" ? node.left.path : "";
+    const minVal = node.min && "value" in node.min ? node.min.value : 0;
+    const maxVal = node.max && "value" in node.max ? node.max.value : 0;
     return `where("${fieldPath}").between(${minVal}, ${maxVal})`;
   }
-  const fieldPath = node.left.type === "field" ? node.left.path : "";
+  const fieldPath = node.left && node.left.type === "field" ? node.left.path : "";
+  if (
+    node.type === "isNull" ||
+    node.type === "isNotNull" ||
+    node.type === "arrayIsEmpty" ||
+    node.type === "arrayIsNotEmpty"
+  ) {
+    return `where("${fieldPath}").${node.type}()`;
+  }
   const val = node.right;
   let valStr = "";
-  if (val.type === "string") valStr = `"${val.value}"`;
+  if (!val) valStr = '""';
+  else if (val.type === "field") valStr = `field("${val.path}")`;
+  else if (val.type === "string") {
+    const dynamicField = extractFieldPath(val.value);
+    valStr = dynamicField ? `field("${dynamicField}")` : `"${val.value}"`;
+  }
   else if (val.type === "number" || val.type === "boolean") valStr = String(val.value);
   else if (val.type === "null") valStr = "null";
   else if (val.type === "array") {
-    const items = val.values.map((v) => ("value" in v ? typeof v.value === "string" ? `"${v.value}"` : String(v.value) : "null"));
+    const items = (val.values || []).map((v) =>
+      "value" in v ? (typeof v.value === "string" ? `"${v.value}"` : String(v.value)) : "null"
+    );
     valStr = `[${items.join(", ")}]`;
   }
-  return `where("${fieldPath}").${node.type}(${valStr})`;
+  return `where("${fieldPath}").${node.type || "eq"}(${valStr})`;
 }
 
 // ---------------------------------------------------------------------------
@@ -236,10 +313,17 @@ function generateTSCode(node: RuleNode, indent = "  "): string {
 // ---------------------------------------------------------------------------
 
 export default function InteractivePlayground() {
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    if (typeof document !== "undefined") {
+      return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+    }
+    return "light";
+  });
   const [activePreset, setActivePreset] = useState<Preset>(PRESETS[0]);
   const [currentRule, setCurrentRule] = useState<Rule>(PRESETS[0].rule!);
-  const [currentDecisionTable, setCurrentDecisionTable] = useState<DecisionTable<unknown> | undefined>(PRESETS[0].decisionTable);
+  const [currentDecisionTable, setCurrentDecisionTable] = useState<DecisionTable<unknown> | undefined>(
+    PRESETS[0].decisionTable
+  );
   const [dataInput, setDataInput] = useState<string>(
     JSON.stringify(PRESETS[0].sampleData, null, 2)
   );
@@ -247,8 +331,24 @@ export default function InteractivePlayground() {
     JSON.stringify(PRESETS[0].isDecisionTable ? PRESETS[0].decisionTable : PRESETS[0].rule, null, 2)
   );
   const [editorTab, setEditorTab] = useState<"visual" | "matrix" | "json" | "ts">("visual");
+  const [pushdownTab, setPushdownTab] = useState<"sql" | "mongo">("sql");
   const [sqlStyle, setSqlStyle] = useState<"snake" | "quote" | "path">("snake");
   const [copied, setCopied] = useState<string | null>(null);
+  const [showNewRuleMenu, setShowNewRuleMenu] = useState(false);
+  const newRuleMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (newRuleMenuRef.current && !newRuleMenuRef.current.contains(event.target as Node)) {
+        setShowNewRuleMenu(false);
+      }
+    }
+    if (showNewRuleMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showNewRuleMenu]);
 
   // Sync theme with Starlight html data-theme
   useEffect(() => {
@@ -267,8 +367,6 @@ export default function InteractivePlayground() {
   }, []);
 
   const isDark = theme === "dark";
-
-  // Dynamic theme tokens from @qarar/theme
   const t = getThemeTokens(isDark);
 
   function copyToClipboard(text: string, label: string) {
@@ -281,14 +379,99 @@ export default function InteractivePlayground() {
     setActivePreset(p);
     if (p.isDecisionTable && p.decisionTable) {
       setCurrentDecisionTable(p.decisionTable);
+      setCurrentRule(undefined as any);
       setJsonText(JSON.stringify(p.decisionTable, null, 2));
       setEditorTab("matrix");
     } else if (p.rule) {
       setCurrentRule(p.rule);
+      setCurrentDecisionTable(undefined);
       setJsonText(JSON.stringify(p.rule, null, 2));
       setEditorTab("visual");
     }
     setDataInput(JSON.stringify(p.sampleData, null, 2));
+  }
+
+  function handleCreateNewStandardRule() {
+    const blankRule: Rule = {
+      id: "custom-rule-v1",
+      name: "Custom Rule",
+      version: "1",
+      root: {
+        type: "eq",
+        left: { type: "field", path: "user.role" },
+        right: { type: "string", value: "admin" },
+      },
+    };
+    setCurrentRule(blankRule);
+    setCurrentDecisionTable(undefined);
+    setActivePreset({
+      id: "custom-rule",
+      title: "Custom Standard Rule",
+      category: "SaaS",
+      badgeColor: qararTokens.dark.primary,
+      description: "Custom single boolean rule evaluating IF / AND / OR conditions.",
+      rule: blankRule,
+      sampleData: { user: { role: "admin" } },
+      fields: [],
+    });
+    setDataInput(JSON.stringify({ user: { role: "admin" } }, null, 2));
+    setJsonText(JSON.stringify(blankRule, null, 2));
+    setEditorTab("visual");
+    setShowNewRuleMenu(false);
+  }
+
+  function handleCreateNewSwitchRule() {
+    const blankMatrix: DecisionTable<Record<string, unknown>> = {
+      id: "custom-matrix-v1",
+      name: "Custom Switch Matrix",
+      version: "1",
+      mode: "first",
+      branches: [
+        {
+          id: "case-1",
+          name: "Case 1: VIP Tier",
+          condition: {
+            type: "eq",
+            left: { type: "field", path: "customer.tier" },
+            right: { type: "string", value: "vip" },
+          },
+          output: { discountPercent: 20, freeShipping: true },
+        },
+        {
+          id: "case-2",
+          name: "Case 2: Regular Tier",
+          condition: {
+            type: "eq",
+            left: { type: "field", path: "customer.tier" },
+            right: { type: "string", value: "regular" },
+          },
+          output: { discountPercent: 5, freeShipping: false },
+        },
+      ],
+      defaultOutput: { discountPercent: 0, freeShipping: false },
+    };
+    setCurrentDecisionTable(blankMatrix);
+    setCurrentRule(undefined as any);
+    setActivePreset({
+      id: "custom-matrix",
+      title: "Custom Switch Matrix",
+      category: "Decision Table",
+      badgeColor: qararTokens.dark.accent,
+      description: "Custom multi-branch switch matrix evaluating conditions to return structured outputs.",
+      isDecisionTable: true,
+      decisionTable: blankMatrix,
+      sampleData: { customer: { tier: "vip" } },
+      fields: [],
+    });
+    setDataInput(JSON.stringify({ customer: { tier: "vip" } }, null, 2));
+    setJsonText(JSON.stringify(blankMatrix, null, 2));
+    setEditorTab("matrix");
+    setShowNewRuleMenu(false);
+  }
+
+  function handleDecisionTableChange(updated: DecisionTable<unknown>) {
+    setCurrentDecisionTable(updated);
+    setJsonText(JSON.stringify(updated, null, 2));
   }
 
   function handleRuleNodeChange(updatedNode: RuleNode) {
@@ -307,8 +490,10 @@ export default function InteractivePlayground() {
       if (parsed && typeof parsed === "object") {
         if ("branches" in parsed) {
           setCurrentDecisionTable(parsed as DecisionTable<unknown>);
+          setCurrentRule(undefined as any);
         } else if ("root" in parsed) {
           setCurrentRule(parsed as Rule);
+          setCurrentDecisionTable(undefined);
         }
       }
     } catch {
@@ -325,630 +510,780 @@ export default function InteractivePlayground() {
   }
 
   // Live Rule Evaluation & Pushdown Compilation
-  const isDecision = activePreset.isDecisionTable && currentDecisionTable;
-  const decisionResult = isDecision ? checkDecisionTable(currentDecisionTable, testDataObj) : null;
-  const singleRuleResult = !isDecision ? checkRule(currentRule, testDataObj) : null;
+  const isDecision = Boolean(currentDecisionTable);
+  let decisionResult = null;
+  let singleRuleResult = null;
+  let sqlResult = { sql: "" };
+  let mongoCompiled = { filter: {} as Record<string, unknown> };
 
-  const sqlResult = !isDecision ? compileToSQL(currentRule, { columnStyle: sqlStyle }) : { sql: "N/A (Decision Table)" };
-  const mongoCompiled = !isDecision ? compileToMongo(currentRule) : { filter: { note: "N/A (Decision Table)" } };
+  try {
+    if (isDecision && currentDecisionTable) {
+      decisionResult = checkDecisionTable(currentDecisionTable, testDataObj);
+      sqlResult = { sql: "-- SQL Pushdown not applicable for Decision Matrix" };
+      mongoCompiled = { filter: { note: "MongoDB filter not applicable for Decision Matrix" } };
+    } else if (currentRule) {
+      singleRuleResult = checkRule(currentRule, testDataObj);
+      try {
+        sqlResult = compileToSQL(currentRule, { columnStyle: sqlStyle });
+      } catch (err: any) {
+        sqlResult = { sql: `-- SQL compile notice: ${err?.message || "Incomplete rule"}` };
+      }
+      try {
+        mongoCompiled = compileToMongo(currentRule);
+      } catch (err: any) {
+        mongoCompiled = { filter: { notice: err?.message || "Incomplete rule" } };
+      }
+    }
+  } catch {
+    // Graceful fallback during typing
+  }
 
-  const generatedCode = isDecision
-    ? `import { switchRule, rule, where, checkDecisionTable } from "@qarar/sdk";
+  let generatedCode = "";
+  try {
+    if (isDecision && currentDecisionTable) {
+      generatedCode = `import { switchRule, rule, checkDecisionTable } from "@qarar/sdk";
 
-const pricingMatrix = switchRule("${currentDecisionTable?.name}")
-  .id("${currentDecisionTable?.id}")
+const pricingMatrix = switchRule("${currentDecisionTable?.name || "Decision Table"}")
+  .id("${currentDecisionTable?.id || "matrix-v1"}")
   .case("vip-branch", rule().where("customer.tier").eq("vip").and("cart.total").gte(200))
     .then({ discountPercent: 25, freeShipping: true })
-  .default(${JSON.stringify(currentDecisionTable?.defaultOutput)})
+  .default(${JSON.stringify(currentDecisionTable?.defaultOutput || {})})
   .build();
 
 const decision = checkDecisionTable(pricingMatrix, data);
-console.log(decision.matchedBranch?.id); // "${decisionResult?.matchedBranch?.id}"`
-    : `import { rule, where, checkRule } from "@qarar/sdk";
+console.log(decision.matchedBranch?.id); // "${decisionResult?.matchedBranch?.id || ""}"`;
+    } else if (currentRule) {
+      const safeId = (currentRule.id || "discount_rule").replace(/[^a-zA-Z0-9]+/g, "_");
+      generatedCode = `import { rule, where, checkRule } from "@qarar/sdk";
 
-const ${currentRule.id.replace(/[^a-zA-Z0-9]+/g, "_")} = rule("${currentRule.name}")
-  .id("${currentRule.id}")
+const ${safeId} = rule("${currentRule.name || "Rule"}")
+  .id("${currentRule.id || "rule-v1"}")
   .where(${generateTSCode(currentRule.root)})
   .build();
 
-const decision = checkRule(${currentRule.id.replace(/[^a-zA-Z0-9]+/g, "_")}, data);
-console.log(decision.result); // ${singleRuleResult?.result}`;
+const decision = checkRule(${safeId}, data);
+console.log(decision.result); // ${singleRuleResult?.result ?? false}`;
+    }
+  } catch {
+    generatedCode = `// Generated TypeScript will update when rule AST is valid`;
+  }
 
   return (
     <div
       className="not-content"
       style={{
-        borderRadius: "16px",
-        border: `1px solid ${t.border}`,
-        backgroundColor: t.bg,
-        color: t.text,
-        padding: "20px",
-        boxShadow: t.shadow,
-        fontFamily: "system-ui, -apple-system, sans-serif",
-        transition: "background-color 0.2s ease, border-color 0.2s ease",
+        borderRadius: "10px",
+        border: "1px solid var(--qarar-border)",
+        backgroundColor: "var(--qarar-bg)",
+        color: "var(--qarar-text)",
+        padding: "18px",
+        boxShadow: "var(--qarar-shadow-sm)",
+        fontFamily: "Inter, system-ui, -apple-system, sans-serif",
       }}
     >
-      {/* Sleek Preset Template Toolbar */}
+      {/* Sleek Top Toolbar */}
       <div
         style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "12px",
+          paddingBottom: "14px",
           marginBottom: "16px",
+          borderBottom: "1px solid var(--qarar-border)",
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: "12px",
-            marginTop: "16px",
-            padding: "12px 16px",
-            backgroundColor: t.subcardBg,
-            border: `1px solid ${t.border}`,
-            borderRadius: "10px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-            <span style={{ fontSize: "0.82rem", fontWeight: 700, color: t.textMuted }}>
-              Rule Template:
-            </span>
-            <select
-              value={activePreset.id}
-              onChange={(e) => {
-                const found = PRESETS.find((p) => p.id === e.target.value);
-                if (found) loadPreset(found);
-              }}
-              style={{
-                height: "36px",
-                padding: "0 12px",
-                borderRadius: "6px",
-                border: `1px solid ${t.inputBorder}`,
-                backgroundColor: t.inputBg,
-                color: t.text,
-                fontSize: "0.85rem",
-                fontWeight: 600,
-                outline: "none",
-                cursor: "pointer",
-                minWidth: "260px",
-              }}
-            >
-              {PRESETS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title}
-                </option>
-              ))}
-            </select>
-            <span
-              style={{
-                fontSize: "0.78rem",
-                color: t.textMuted,
-                maxWidth: "380px",
-                lineHeight: "1.3",
-              }}
-            >
-              {activePreset.description}
-            </span>
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--qarar-text-muted)" }}>
+            Preset:
+          </span>
+          <select
+            value={activePreset.id}
+            onChange={(e) => {
+              const found = PRESETS.find((p) => p.id === e.target.value);
+              if (found) loadPreset(found);
+            }}
+            style={{
+              height: "32px",
+              padding: "0 10px",
+              borderRadius: "6px",
+              border: "1px solid var(--qarar-input-border)",
+              backgroundColor: "var(--qarar-input-bg)",
+              color: "var(--qarar-input-text)",
+              fontSize: "0.84rem",
+              fontWeight: 500,
+              outline: "none",
+              cursor: "pointer",
+            }}
+          >
+            {activePreset.id.startsWith("custom") && (
+              <option value={activePreset.id}>
+                {activePreset.title} (Custom)
+              </option>
+            )}
+            {PRESETS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.title}
+              </option>
+            ))}
+          </select>
+          <span
+            style={{
+              fontSize: "0.8rem",
+              color: "var(--qarar-text-muted)",
+              lineHeight: "1.4",
+            }}
+          >
+            {activePreset.description}
+          </span>
+        </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {/* New Rule Dropdown with 2 Options */}
+          <div ref={newRuleMenuRef} style={{ position: "relative" }}>
             <button
               type="button"
-              onClick={() => {
-                const blankRule: Rule = {
-                  id: "custom-rule-v1",
-                  name: "New Custom Rule",
-                  version: "1",
-                  root: {
-                    type: "eq",
-                    left: { type: "field", path: "user.role" },
-                    right: { type: "string", value: "admin" },
-                  },
-                };
-                setCurrentRule(blankRule);
-                setJsonText(JSON.stringify(blankRule, null, 2));
-                setEditorTab("visual");
-              }}
+              onClick={() => setShowNewRuleMenu((prev) => !prev)}
               style={{
                 fontSize: "0.78rem",
                 fontWeight: 600,
-                color: isDark ? "#94a3b8" : "#475569",
-                backgroundColor: "transparent",
-                border: `1px solid ${t.borderSubtle}`,
+                color: "var(--qarar-text)",
+                backgroundColor: "var(--qarar-surface-3)",
+                border: "1px solid var(--qarar-border)",
                 borderRadius: "6px",
                 padding: "6px 12px",
                 cursor: "pointer",
-              }}
-            >
-              + New Blank Rule
-            </button>
-            <a
-              href="/recipes/ecommerce-discounts/"
-              style={{
-                fontSize: "0.78rem",
-                fontWeight: 600,
-                color: t.primary,
-                textDecoration: "none",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "4px",
+                gap: "6px",
               }}
             >
-              📖 View Recipes in Docs →
-            </a>
+              <span>+ New Rule</span>
+              <span style={{ fontSize: "0.62rem", opacity: 0.7 }}>▼</span>
+            </button>
+
+            {showNewRuleMenu && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 4px)",
+                  right: 0,
+                  zIndex: 100,
+                  minWidth: "260px",
+                  backgroundColor: "var(--qarar-surface-2)",
+                  border: "1px solid var(--qarar-border)",
+                  borderRadius: "8px",
+                  padding: "6px",
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={handleCreateNewStandardRule}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-start",
+                    padding: "8px 10px",
+                    border: "none",
+                    borderRadius: "6px",
+                    backgroundColor: "transparent",
+                    color: "var(--qarar-text)",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--qarar-surface-3)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                >
+                  <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>Standard Rule</span>
+                  <span style={{ fontSize: "0.72rem", color: "var(--qarar-text-muted)", marginTop: "2px" }}>
+                    Single boolean rule (IF / AND / OR) with pushdown
+                  </span>
+                </button>
+
+                <div style={{ height: "1px", backgroundColor: "var(--qarar-border)", margin: "4px 0" }} />
+
+                <button
+                  type="button"
+                  onClick={handleCreateNewSwitchRule}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-start",
+                    padding: "8px 10px",
+                    border: "none",
+                    borderRadius: "6px",
+                    backgroundColor: "transparent",
+                    color: "var(--qarar-text)",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--qarar-surface-3)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                >
+                  <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>Switch Rule (Decision Matrix)</span>
+                  <span style={{ fontSize: "0.72rem", color: "var(--qarar-text-muted)", marginTop: "2px" }}>
+                    Multi-branch matrix returning structured outputs
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
+          <a
+            href="/recipes/business-patterns/"
+            style={{
+              fontSize: "0.78rem",
+              fontWeight: 500,
+              color: "var(--qarar-primary)",
+              textDecoration: "none",
+              padding: "5px 10px",
+            }}
+          >
+            Recipes ↗
+          </a>
         </div>
       </div>
 
-      {/* Main Studio Dual Pane */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "22px" }}>
+      {/* Main Studio 2-Column Workspace */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.15fr 0.85fr", gap: "16px", alignItems: "start" }}>
         
-        {/* Left Pane: Editor */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-          
-          {/* Editor Tabs Navigation */}
-          <div style={{ display: "flex", borderBottom: `1px solid ${t.border}`, backgroundColor: t.subcardBg, borderRadius: "10px 10px 0 0", padding: "4px 8px 0 8px" }}>
-            {!isDecision && (
-              <button
-                type="button"
-                onClick={() => setEditorTab("visual")}
-                style={{
-                  padding: "10px 18px",
-                  borderBottom: editorTab === "visual" ? `3px solid ${t.primary}` : "3px solid transparent",
-                  color: editorTab === "visual" ? t.primary : t.textMuted,
-                  backgroundColor: "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                  fontWeight: 700,
-                  fontSize: "0.88rem",
-                }}
-              >
-                🎨 Visual Builder
-              </button>
-            )}
+        {/* Left Column: Logic Authoring */}
+        <div
+          style={{
+            border: "1px solid var(--qarar-border)",
+            borderRadius: "8px",
+            backgroundColor: "var(--qarar-surface)",
+            overflow: "hidden",
+          }}
+        >
+          {/* Editor Header & Mode Selector */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "8px 12px",
+              borderBottom: "1px solid var(--qarar-border)",
+              backgroundColor: "var(--qarar-surface-2)",
+            }}
+          >
+            <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--qarar-text)" }}>
+              Rule Logic
+            </span>
 
-            {isDecision && (
-              <button
-                type="button"
-                onClick={() => setEditorTab("matrix")}
-                style={{
-                  padding: "10px 18px",
-                  borderBottom: editorTab === "matrix" ? `3px solid ${t.accent}` : "3px solid transparent",
-                  color: editorTab === "matrix" ? t.accent : t.textMuted,
-                  backgroundColor: "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                  fontWeight: 700,
-                  fontSize: "0.88rem",
-                }}
-              >
-                🔀 Decision Matrix View
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setEditorTab("json")}
+            {/* Segmented Control */}
+            <div
               style={{
-                padding: "10px 18px",
-                borderBottom: editorTab === "json" ? `3px solid ${t.primary}` : "3px solid transparent",
-                color: editorTab === "json" ? t.primary : t.textMuted,
-                backgroundColor: "transparent",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 700,
-                fontSize: "0.88rem",
+                display: "inline-flex",
+                backgroundColor: "var(--qarar-surface-3)",
+                borderRadius: "6px",
+                padding: "2px",
+                gap: "2px",
               }}
             >
-              📄 JSON AST Editor
-            </button>
+              {!isDecision && (
+                <button
+                  type="button"
+                  onClick={() => setEditorTab("visual")}
+                  style={{
+                    padding: "4px 10px",
+                    border: "none",
+                    borderRadius: "4px",
+                    backgroundColor: editorTab === "visual" ? "var(--qarar-bg)" : "transparent",
+                    color: editorTab === "visual" ? "var(--qarar-text)" : "var(--qarar-text-muted)",
+                    fontWeight: editorTab === "visual" ? 600 : 500,
+                    fontSize: "0.78rem",
+                    cursor: "pointer",
+                    boxShadow: editorTab === "visual" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                  }}
+                >
+                  Visual
+                </button>
+              )}
 
-            <button
-              type="button"
-              onClick={() => setEditorTab("ts")}
-              style={{
-                padding: "10px 18px",
-                borderBottom: editorTab === "ts" ? `3px solid ${t.primary}` : "3px solid transparent",
-                color: editorTab === "ts" ? t.primary : t.textMuted,
-                backgroundColor: "transparent",
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 700,
-                fontSize: "0.88rem",
-              }}
-            >
-              ⚡ TypeScript Code
-            </button>
+              {isDecision && (
+                <button
+                  type="button"
+                  onClick={() => setEditorTab("matrix")}
+                  style={{
+                    padding: "4px 10px",
+                    border: "none",
+                    borderRadius: "4px",
+                    backgroundColor: editorTab === "matrix" ? "var(--qarar-bg)" : "transparent",
+                    color: editorTab === "matrix" ? "var(--qarar-accent)" : "var(--qarar-text-muted)",
+                    fontWeight: editorTab === "matrix" ? 600 : 500,
+                    fontSize: "0.78rem",
+                    cursor: "pointer",
+                    boxShadow: editorTab === "matrix" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                  }}
+                >
+                  Matrix
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setEditorTab("json")}
+                style={{
+                  padding: "4px 10px",
+                  border: "none",
+                  borderRadius: "4px",
+                  backgroundColor: editorTab === "json" ? "var(--qarar-bg)" : "transparent",
+                  color: editorTab === "json" ? "var(--qarar-text)" : "var(--qarar-text-muted)",
+                  fontWeight: editorTab === "json" ? 600 : 500,
+                  fontSize: "0.78rem",
+                  cursor: "pointer",
+                  boxShadow: editorTab === "json" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                }}
+              >
+                JSON AST
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setEditorTab("ts")}
+                style={{
+                  padding: "4px 10px",
+                  border: "none",
+                  borderRadius: "4px",
+                  backgroundColor: editorTab === "ts" ? "var(--qarar-bg)" : "transparent",
+                  color: editorTab === "ts" ? "var(--qarar-text)" : "var(--qarar-text-muted)",
+                  fontWeight: editorTab === "ts" ? 600 : 500,
+                  fontSize: "0.78rem",
+                  cursor: "pointer",
+                  boxShadow: editorTab === "ts" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                }}
+              >
+                TypeScript
+              </button>
+            </div>
           </div>
 
-          {/* Active Tab Views */}
-          {editorTab === "visual" && !isDecision && (
-            <div>
+          {/* Editor Body */}
+          <div style={{ padding: "12px" }}>
+            {editorTab === "visual" && !isDecision && (
               <RuleBuilder
                 value={currentRule}
                 onChange={handleRuleNodeChange}
                 fields={activePreset.fields}
-                theme={t}
+                theme={cssVarTokens}
               />
-            </div>
-          )}
+            )}
 
-          {editorTab === "matrix" && isDecision && currentDecisionTable && (
-            <div style={{ backgroundColor: t.subcardBg, border: `1px solid ${t.border}`, borderRadius: "10px", padding: "16px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-                <h4 style={{ margin: 0, color: t.accent, fontSize: "1rem", fontWeight: 800 }}>
-                  🔀 Decision Table Matrix: {currentDecisionTable.name}
-                </h4>
-                <span style={{ fontSize: "0.75rem", backgroundColor: t.accentSubtle, color: t.accent, padding: "2px 8px", borderRadius: "4px", fontWeight: 600 }}>
-                  Mode: {currentDecisionTable.mode ?? "first"} match wins
-                </span>
-              </div>
+            {editorTab === "matrix" && isDecision && currentDecisionTable && (
+              <DecisionTableBuilder
+                value={currentDecisionTable}
+                onChange={handleDecisionTableChange}
+                fields={activePreset.fields}
+                matchedBranchId={decisionResult?.matchedBranch?.id ?? null}
+                theme={cssVarTokens}
+              />
+            )}
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                {currentDecisionTable.branches.map((b, i) => {
-                  const isMatchedBranch = decisionResult?.matchedBranch?.id === b.id;
-                  return (
-                    <div
-                      key={b.id}
-                      style={{
-                        padding: "12px",
-                        borderRadius: "8px",
-                        border: "1px solid",
-                        borderColor: isMatchedBranch ? t.passBorder : t.border,
-                        backgroundColor: isMatchedBranch ? t.passBg : t.cardBg,
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-                        <span style={{ fontWeight: 800, color: isMatchedBranch ? t.pass : t.text, fontSize: "0.88rem" }}>
-                          Case {i + 1}: {b.name ?? b.id}
-                        </span>
-                        {isMatchedBranch ? (
-                          <span style={{ backgroundColor: t.pass, color: "#ffffff", padding: "2px 8px", borderRadius: "4px", fontSize: "0.72rem", fontWeight: 800 }}>
-                            MATCHED BRANCH ✅
-                          </span>
-                        ) : (
-                          <span style={{ color: t.textMuted, fontSize: "0.72rem" }}>Skipped</span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: "0.8rem", color: t.textMuted, marginTop: "4px" }}>
-                        Output Payload: <code style={{ color: t.codeText }}>{JSON.stringify(b.output)}</code>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                <div style={{ padding: "10px 12px", borderRadius: "8px", border: `1px dashed ${t.borderSubtle}`, backgroundColor: t.cardBg, fontSize: "0.8rem", color: t.textMuted }}>
-                  ⚪ Default Fallback Output: <code style={{ color: t.codeTs }}>{JSON.stringify(currentDecisionTable.defaultOutput)}</code>
+            {editorTab === "json" && (
+              <div>
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "6px" }}>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(jsonText, "json")}
+                    style={{
+                      fontSize: "0.74rem",
+                      backgroundColor: "var(--qarar-surface-3)",
+                      color: "var(--qarar-text)",
+                      border: "1px solid var(--qarar-border)",
+                      padding: "3px 8px",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {copied === "json" ? "Copied" : "Copy JSON"}
+                  </button>
                 </div>
+                <textarea
+                  rows={16}
+                  value={jsonText}
+                  onChange={(e) => handleJsonTextChange(e.target.value)}
+                  style={{
+                    width: "100%",
+                    backgroundColor: "var(--qarar-code-bg)",
+                    color: "var(--qarar-code-text)",
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: "0.82rem",
+                    padding: "10px",
+                    borderRadius: "6px",
+                    border: "1px solid var(--qarar-border)",
+                    boxSizing: "border-box",
+                    outline: "none",
+                    lineHeight: "1.4",
+                  }}
+                />
               </div>
-            </div>
-          )}
+            )}
 
-          {editorTab === "json" && (
-            <div>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "6px" }}>
+            {editorTab === "ts" && (
+              <div>
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "6px" }}>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(generatedCode, "ts")}
+                    style={{
+                      fontSize: "0.74rem",
+                      backgroundColor: "var(--qarar-surface-3)",
+                      color: "var(--qarar-text)",
+                      border: "1px solid var(--qarar-border)",
+                      padding: "3px 8px",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {copied === "ts" ? "Copied" : "Copy Code"}
+                  </button>
+                </div>
+                <pre
+                  style={{
+                    margin: 0,
+                    width: "100%",
+                    backgroundColor: "var(--qarar-code-bg)",
+                    color: "var(--qarar-code-ts)",
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: "0.82rem",
+                    padding: "12px",
+                    borderRadius: "6px",
+                    border: "1px solid var(--qarar-border)",
+                    overflowX: "auto",
+                    whiteSpace: "pre-wrap",
+                    boxSizing: "border-box",
+                    lineHeight: "1.4",
+                  }}
+                >
+                  {generatedCode}
+                </pre>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column: Live Evaluation & Pushdown Queries */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          
+          {/* Card 1: Live Evaluation & Input Payload */}
+          <div
+            style={{
+              border: "1px solid var(--qarar-border)",
+              borderRadius: "8px",
+              backgroundColor: "var(--qarar-surface)",
+              overflow: "hidden",
+            }}
+          >
+            {/* Header with Status Pill */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "8px 12px",
+                borderBottom: "1px solid var(--qarar-border)",
+                backgroundColor: "var(--qarar-surface-2)",
+              }}
+            >
+              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--qarar-text)" }}>
+                Live Evaluation
+              </span>
+
+              {isDecision && decisionResult && (
+                <span
+                  style={{
+                    fontSize: "0.72rem",
+                    fontWeight: 600,
+                    padding: "2px 8px",
+                    borderRadius: "9999px",
+                    backgroundColor: decisionResult.matched ? "var(--qarar-pass-bg)" : "var(--qarar-warn-bg)",
+                    color: decisionResult.matched ? "var(--qarar-pass)" : "var(--qarar-warn)",
+                    border: `1px solid ${decisionResult.matched ? "var(--qarar-pass-border)" : "var(--qarar-warn-border)"}`,
+                  }}
+                >
+                  {decisionResult.matched
+                    ? `Matched: ${decisionResult.matchedBranch?.id ?? "Case"}`
+                    : "Default Fallback"}
+                </span>
+              )}
+
+              {!isDecision && singleRuleResult && (
+                <span
+                  style={{
+                    fontSize: "0.72rem",
+                    fontWeight: 600,
+                    padding: "2px 8px",
+                    borderRadius: "9999px",
+                    backgroundColor: singleRuleResult.result ? "var(--qarar-pass-bg)" : "var(--qarar-fail-bg)",
+                    color: singleRuleResult.result ? "var(--qarar-pass)" : "var(--qarar-fail)",
+                    border: `1px solid ${singleRuleResult.result ? "var(--qarar-pass-border)" : "var(--qarar-fail-border)"}`,
+                  }}
+                >
+                  {singleRuleResult.result ? "Pass" : "Fail"}
+                </span>
+              )}
+            </div>
+
+            {/* Input Payload Textarea */}
+            <div style={{ padding: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                <span style={{ fontSize: "0.78rem", fontWeight: 500, color: "var(--qarar-text-muted)" }}>
+                  Input Payload (JSON)
+                </span>
                 <button
                   type="button"
-                  onClick={() => copyToClipboard(jsonText, "json")}
+                  onClick={() => setDataInput(JSON.stringify(activePreset.sampleData, null, 2))}
                   style={{
-                    fontSize: "0.75rem",
-                    backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
-                    color: t.text,
-                    border: `1px solid ${t.borderSubtle}`,
-                    padding: "4px 10px",
-                    borderRadius: "6px",
+                    fontSize: "0.72rem",
+                    color: "var(--qarar-primary)",
+                    backgroundColor: "transparent",
+                    border: "none",
                     cursor: "pointer",
                   }}
                 >
-                  {copied === "json" ? "Copied! ✓" : "Copy JSON AST"}
+                  Reset Sample
                 </button>
               </div>
+
               <textarea
-                rows={18}
-                value={jsonText}
-                onChange={(e) => handleJsonTextChange(e.target.value)}
+                rows={5}
+                value={dataInput}
+                onChange={(e) => setDataInput(e.target.value)}
                 style={{
                   width: "100%",
-                  backgroundColor: t.codeBg,
-                  color: t.codeText,
-                  fontFamily: "monospace",
-                  fontSize: "0.85rem",
-                  padding: "14px",
-                  borderRadius: "10px",
-                  border: `1px solid ${t.border}`,
+                  backgroundColor: "var(--qarar-input-bg)",
+                  color: "var(--qarar-input-text)",
+                  fontFamily: "ui-monospace, monospace",
+                  fontSize: "0.82rem",
+                  padding: "8px 10px",
+                  borderRadius: "6px",
+                  border: "1px solid var(--qarar-input-border)",
                   boxSizing: "border-box",
                   outline: "none",
                   lineHeight: "1.4",
                 }}
               />
-            </div>
-          )}
+              {jsonError && (
+                <span style={{ color: "var(--qarar-fail)", fontSize: "0.72rem", display: "block", marginTop: "4px" }}>
+                  Invalid JSON syntax
+                </span>
+              )}
 
-          {editorTab === "ts" && (
-            <div>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "6px" }}>
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(generatedCode, "ts")}
-                  style={{
-                    fontSize: "0.75rem",
-                    backgroundColor: isDark ? "#1e293b" : "#f1f5f9",
-                    color: t.text,
-                    border: `1px solid ${t.borderSubtle}`,
-                    padding: "4px 10px",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                  }}
-                >
-                  {copied === "ts" ? "Copied! ✓" : "Copy TypeScript Code"}
-                </button>
-              </div>
-              <pre
-                style={{
-                  width: "100%",
-                  backgroundColor: t.codeBg,
-                  color: t.codeTs,
-                  fontFamily: "monospace",
-                  fontSize: "0.85rem",
-                  padding: "14px",
-                  borderRadius: "10px",
-                  border: `1px solid ${t.border}`,
-                  overflowX: "auto",
-                  whiteSpace: "pre-wrap",
-                  boxSizing: "border-box",
-                  lineHeight: "1.4",
-                }}
-              >
-                {generatedCode}
-              </pre>
-            </div>
-          )}
-
-          {/* Database Target Query Generator (Single Rules Only) */}
-          {!isDecision && (
-            <div style={{ backgroundColor: t.subcardBg, border: `1px solid ${t.border}`, borderRadius: "12px", padding: "16px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
-                <h4 style={{ margin: 0, color: t.text, fontSize: "0.95rem", fontWeight: 700 }}>
-                  🗄️ Database Query Pushdown (Live Compiler)
-                </h4>
-                <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                  <span style={{ fontSize: "0.75rem", color: t.textMuted }}>Column Style:</span>
-                  {(["snake", "quote", "path"] as const).map((style) => (
-                    <button
-                      key={style}
-                      type="button"
-                      onClick={() => setSqlStyle(style)}
-                      style={{
-                        fontSize: "0.72rem",
-                        padding: "3px 8px",
-                        borderRadius: "4px",
-                        border: "1px solid",
-                        borderColor: sqlStyle === style ? t.primary : t.borderSubtle,
-                        backgroundColor: sqlStyle === style ? t.primaryHover : "transparent",
-                        color: sqlStyle === style ? "#ffffff" : t.textMuted,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {style}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "0.82rem", fontFamily: "monospace" }}>
-                <div style={{ backgroundColor: t.cardBg, padding: "12px", borderRadius: "8px", border: `1px solid ${t.border}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", color: t.accent, fontWeight: "bold", marginBottom: "6px" }}>
-                    <span>SQL WHERE Clause (~1.6M ops/sec)</span>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(sqlResult.sql, "sql")}
-                      style={{ fontSize: "0.72rem", color: t.textMuted, border: "none", backgroundColor: "transparent", cursor: "pointer" }}
-                    >
-                      {copied === "sql" ? "Copied!" : "Copy SQL"}
-                    </button>
-                  </div>
-                  <div
-                    style={{
-                      backgroundColor: t.codeBg,
-                      color: t.codeText,
-                      border: `1px solid ${t.border}`,
-                      padding: "10px 14px",
-                      borderRadius: "6px",
-                      fontFamily: "monospace",
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-all",
-                      fontSize: "0.85rem",
-                      lineHeight: "1.4",
-                    }}
-                  >
-                    {sqlResult.sql || "Invalid SQL"}
-                  </div>
-                </div>
-
-                <div style={{ backgroundColor: t.cardBg, padding: "12px", borderRadius: "8px", border: `1px solid ${t.border}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", color: t.primary, fontWeight: "bold", marginBottom: "6px" }}>
-                    <span>MongoDB Filter Object (~13.7M ops/sec)</span>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(JSON.stringify(mongoCompiled.filter), "mongo")}
-                      style={{ fontSize: "0.72rem", color: t.textMuted, border: "none", backgroundColor: "transparent", cursor: "pointer" }}
-                    >
-                      {copied === "mongo" ? "Copied!" : "Copy Mongo"}
-                    </button>
-                  </div>
+              {/* Decision Table Output */}
+              {isDecision && decisionResult && (
+                <div style={{ marginTop: "10px" }}>
+                  <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--qarar-text-muted)" }}>
+                    Output Data:
+                  </span>
                   <pre
                     style={{
-                      margin: 0,
-                      backgroundColor: t.codeBg,
-                      color: t.codeText,
-                      border: `1px solid ${t.border}`,
-                      padding: "10px 14px",
+                      margin: "4px 0 0 0",
+                      fontSize: "0.78rem",
+                      fontFamily: "ui-monospace, monospace",
+                      color: "var(--qarar-code-text)",
+                      backgroundColor: "var(--qarar-code-bg)",
+                      border: "1px solid var(--qarar-border)",
+                      padding: "8px 10px",
                       borderRadius: "6px",
-                      whiteSpace: "pre-wrap",
-                      lineHeight: "1.3",
                     }}
                   >
-                    {JSON.stringify(mongoCompiled.filter, null, 2)}
+                    {JSON.stringify(decisionResult.output, null, 2)}
                   </pre>
                 </div>
-              </div>
-            </div>
-          )}
-        </div>
+              )}
 
-        {/* Right Pane: Test Data Payload & Live Decision Outcome */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          
-          {/* Data Payload Input */}
-          <div style={{ backgroundColor: t.subcardBg, border: `1px solid ${t.border}`, borderRadius: "12px", padding: "16px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-              <h4 style={{ margin: 0, color: t.text, fontSize: "0.95rem", fontWeight: 700 }}>
-                📥 Mock Input Payload (JSON Data)
-              </h4>
-              <button
-                type="button"
-                onClick={() => setDataInput(JSON.stringify(activePreset.sampleData, null, 2))}
-                style={{ fontSize: "0.72rem", color: t.primary, backgroundColor: "transparent", border: "none", cursor: "pointer", textDecoration: "underline" }}
-              >
-                Reset Sample Data
-              </button>
-            </div>
-            <textarea
-              rows={8}
-              value={dataInput}
-              onChange={(e) => setDataInput(e.target.value)}
-              style={{
-                width: "100%",
-                backgroundColor: t.inputBg,
-                color: t.inputDataColor,
-                fontFamily: "monospace",
-                fontSize: "0.85rem",
-                padding: "12px",
-                borderRadius: "8px",
-                border: `1px solid ${t.inputBorder}`,
-                boxSizing: "border-box",
-                outline: "none",
-                lineHeight: "1.4",
-              }}
-            />
-            {jsonError && (
-              <span style={{ color: t.fail, fontSize: "0.75rem", display: "block", marginTop: "6px", fontWeight: 600 }}>
-                ⚠️ Syntax Error: Invalid JSON format
-              </span>
-            )}
-          </div>
-
-          {/* Decision Outcome Status Banner */}
-          {isDecision && decisionResult && (
-            <div
-              style={{
-                backgroundColor: decisionResult.matched ? t.passBg : t.failBg,
-                border: `1.5px solid ${decisionResult.matched ? t.passBorder : t.failBorder}`,
-                borderRadius: "12px",
-                padding: "18px",
-                boxShadow: decisionResult.matched ? "0 0 20px rgba(16, 185, 129, 0.2)" : "0 0 20px rgba(239, 68, 68, 0.2)",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                  <span style={{ fontWeight: 800, fontSize: "1.05rem", color: decisionResult.matched ? (isDark ? t.text : t.pass) : (isDark ? t.text : t.fail) }}>
-                    Decision Table Match:
-                  </span>
-                  <div style={{ fontSize: "0.8rem", color: t.textMuted, marginTop: "2px" }}>
-                    Matched Branch: <strong style={{ color: decisionResult.matched ? t.pass : t.warn }}>{decisionResult.matchedBranch?.name ?? decisionResult.matchedBranch?.id ?? "Default Fallback"}</strong>
-                  </div>
-                </div>
-                <span
+              {/* Explanations (Failure reasons) */}
+              {!isDecision && singleRuleResult && !singleRuleResult.result && singleRuleResult.reasons.length > 0 && (
+                <div
                   style={{
-                    backgroundColor: decisionResult.matched ? t.pass : t.warn,
-                    color: "#ffffff",
-                    padding: "6px 16px",
-                    borderRadius: "9999px",
-                    fontWeight: 800,
-                    fontSize: "0.88rem",
-                    letterSpacing: "0.05em",
+                    marginTop: "10px",
+                    padding: "8px 12px",
+                    borderRadius: "6px",
+                    backgroundColor: "var(--qarar-fail-bg)",
+                    border: "1px solid var(--qarar-fail-border)",
+                    color: "var(--qarar-fail)",
+                    fontSize: "0.78rem",
                   }}
                 >
-                  {decisionResult.matched ? "MATCHED ✅" : "DEFAULT FALLBACK ⚪"}
-                </span>
-              </div>
-
-              <div style={{ marginTop: "12px", borderTop: "1px solid rgba(0,0,0,0.1)", paddingTop: "12px" }}>
-                <strong style={{ fontSize: "0.85rem", color: decisionResult.matched ? t.pass : t.warn }}>
-                  Selected Output Config:
-                </strong>
-                <pre style={{ margin: "6px 0 0 0", fontSize: "0.82rem", color: t.codeText, backgroundColor: t.codeBg, border: `1px solid ${t.border}`, padding: "10px", borderRadius: "6px" }}>
-                  {JSON.stringify(decisionResult.output, null, 2)}
-                </pre>
-              </div>
-            </div>
-          )}
-
-          {!isDecision && singleRuleResult && (
-            <div
-              style={{
-                backgroundColor: singleRuleResult.result ? t.passBg : t.failBg,
-                border: `1.5px solid ${singleRuleResult.result ? t.passBorder : t.failBorder}`,
-                borderRadius: "12px",
-                padding: "18px",
-                boxShadow: singleRuleResult.result ? "0 0 20px rgba(16, 185, 129, 0.2)" : "0 0 20px rgba(239, 68, 68, 0.2)",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                  <span style={{ fontWeight: 800, fontSize: "1.05rem", color: singleRuleResult.result ? (isDark ? t.text : t.pass) : (isDark ? t.text : t.fail) }}>
-                    Rule Evaluation Outcome:
-                  </span>
-                  <div style={{ fontSize: "0.78rem", color: t.textMuted, marginTop: "2px" }}>
-                    Latency: ~0.0002 ms (~4.4M evals/sec)
-                  </div>
-                </div>
-                <span
-                  style={{
-                    backgroundColor: singleRuleResult.result ? t.pass : t.fail,
-                    color: "#ffffff",
-                    padding: "6px 16px",
-                    borderRadius: "9999px",
-                    fontWeight: 800,
-                    fontSize: "0.88rem",
-                    letterSpacing: "0.05em",
-                  }}
-                >
-                  {singleRuleResult.result ? "PASS ✅" : "FAIL ❌"}
-                </span>
-              </div>
-
-              {/* Failure Reasons */}
-              <div style={{ marginTop: "12px", borderTop: "1px solid rgba(0,0,0,0.1)", paddingTop: "12px" }}>
-                <strong style={{ fontSize: "0.85rem", color: singleRuleResult.result ? t.pass : t.fail }}>
-                  Human Audit Explanation (explainFailures):
-                </strong>
-                {singleRuleResult.reasons.length === 0 ? (
-                  <p style={{ margin: "6px 0 0 0", fontSize: "0.85rem", color: t.pass }}>
-                    All rule conditions were satisfied successfully!
-                  </p>
-                ) : (
-                  <ul style={{ margin: "6px 0 0 0", paddingLeft: "18px", fontSize: "0.85rem", color: t.fail, lineHeight: "1.5" }}>
+                  <strong style={{ display: "block", marginBottom: "4px" }}>Failure reasons:</strong>
+                  <ul style={{ margin: 0, paddingLeft: "16px", lineHeight: "1.4" }}>
                     {singleRuleResult.reasons.map((r, i) => (
                       <li key={i}>{r}</li>
                     ))}
                   </ul>
-                )}
+                </div>
+              )}
+
+              {/* Execution Trace */}
+              {!isDecision && singleRuleResult && (
+                <div style={{ marginTop: "12px" }}>
+                  <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--qarar-text-muted)", display: "block", marginBottom: "6px" }}>
+                    Execution Trace
+                  </span>
+                  <div
+                    style={{
+                      backgroundColor: "var(--qarar-bg)",
+                      border: "1px solid var(--qarar-border)",
+                      borderRadius: "6px",
+                      padding: "8px 10px",
+                      fontSize: "0.78rem",
+                      fontFamily: "ui-monospace, monospace",
+                      maxHeight: "140px",
+                      overflowY: "auto",
+                    }}
+                  >
+                    <TraceNodeView entry={singleRuleResult.trace} depth={0} theme={t} />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Card 2: Database Pushdown Queries */}
+          {!isDecision && (
+            <div
+              style={{
+                border: "1px solid var(--qarar-border)",
+                borderRadius: "8px",
+                backgroundColor: "var(--qarar-surface)",
+                overflow: "hidden",
+              }}
+            >
+              {/* Pushdown Header */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "8px 12px",
+                  borderBottom: "1px solid var(--qarar-border)",
+                  backgroundColor: "var(--qarar-surface-2)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--qarar-text)" }}>
+                    Database Pushdown
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  {/* SQL / Mongo Toggle */}
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      backgroundColor: "var(--qarar-surface-3)",
+                      borderRadius: "4px",
+                      padding: "2px",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setPushdownTab("sql")}
+                      style={{
+                        padding: "2px 8px",
+                        border: "none",
+                        borderRadius: "3px",
+                        backgroundColor: pushdownTab === "sql" ? "var(--qarar-bg)" : "transparent",
+                        color: pushdownTab === "sql" ? "var(--qarar-text)" : "var(--qarar-text-muted)",
+                        fontSize: "0.74rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      SQL
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPushdownTab("mongo")}
+                      style={{
+                        padding: "2px 8px",
+                        border: "none",
+                        borderRadius: "3px",
+                        backgroundColor: pushdownTab === "mongo" ? "var(--qarar-bg)" : "transparent",
+                        color: pushdownTab === "mongo" ? "var(--qarar-text)" : "var(--qarar-text-muted)",
+                        fontSize: "0.74rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      MongoDB
+                    </button>
+                  </div>
+
+                  {pushdownTab === "sql" && (
+                    <select
+                      value={sqlStyle}
+                      onChange={(e) => setSqlStyle(e.target.value as any)}
+                      style={{
+                        height: "24px",
+                        padding: "0 6px",
+                        borderRadius: "4px",
+                        border: "1px solid var(--qarar-border)",
+                        backgroundColor: "var(--qarar-input-bg)",
+                        color: "var(--qarar-text)",
+                        fontSize: "0.72rem",
+                        cursor: "pointer",
+                        outline: "none",
+                      }}
+                    >
+                      <option value="snake">snake_case</option>
+                      <option value="quote">"quoted"</option>
+                      <option value="path">path</option>
+                    </select>
+                  )}
+                </div>
+              </div>
+
+              {/* Pushdown Output */}
+              <div style={{ padding: "10px 12px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                  <span style={{ fontSize: "0.72rem", color: "var(--qarar-text-muted)" }}>
+                    {pushdownTab === "sql" ? "WHERE Clause" : "Filter Query"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      copyToClipboard(
+                        pushdownTab === "sql" ? sqlResult.sql : JSON.stringify(mongoCompiled.filter, null, 2),
+                        "pushdown"
+                      )
+                    }
+                    style={{
+                      fontSize: "0.72rem",
+                      color: "var(--qarar-primary)",
+                      backgroundColor: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {copied === "pushdown" ? "Copied" : "Copy"}
+                  </button>
+                </div>
+
+                <pre
+                  style={{
+                    margin: 0,
+                    backgroundColor: "var(--qarar-code-bg)",
+                    color: "var(--qarar-code-text)",
+                    border: "1px solid var(--qarar-border)",
+                    padding: "8px 10px",
+                    borderRadius: "6px",
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: "0.8rem",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-all",
+                    lineHeight: "1.4",
+                  }}
+                >
+                  {pushdownTab === "sql" ? sqlResult.sql : JSON.stringify(mongoCompiled.filter, null, 2)}
+                </pre>
               </div>
             </div>
           )}
-
-          {/* Execution Trace Visualizer */}
-          {!isDecision && singleRuleResult && (
-            <div style={{ backgroundColor: t.subcardBg, border: `1px solid ${t.border}`, borderRadius: "12px", padding: "16px" }}>
-              <h4 style={{ margin: "0 0 10px 0", color: t.text, fontSize: "0.95rem", fontWeight: 700 }}>
-                🌳 Execution Trace Tree Visualizer
-              </h4>
-              <div style={{ fontSize: "0.82rem", fontFamily: "monospace", overflowX: "auto" }}>
-                <TraceNodeView entry={singleRuleResult.trace} depth={0} theme={t} />
-              </div>
-            </div>
-          )}
-
         </div>
       </div>
     </div>
@@ -962,16 +1297,16 @@ console.log(decision.result); // ${singleRuleResult?.result}`;
 function TraceNodeView({ entry, depth, theme }: { entry: TraceEntry; depth: number; theme: QararTheme }) {
   if (entry.type === "logical") {
     return (
-      <div style={{ marginLeft: `${depth * 14}px`, borderLeft: `2px solid ${theme.borderSubtle}`, paddingLeft: "10px", margin: "6px 0" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span style={{ color: entry.passed ? theme.pass : theme.fail, fontWeight: "bold", fontSize: "0.9rem" }}>
+      <div style={{ marginLeft: `${depth * 10}px`, margin: "4px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <span style={{ color: entry.passed ? "var(--qarar-pass)" : "var(--qarar-fail)", fontWeight: 600, fontSize: "0.8rem" }}>
             {entry.passed ? "✓" : "✗"}
           </span>
-          <span style={{ fontWeight: 800, color: entry.operator === "or" ? theme.accent : theme.primary, textTransform: "uppercase" }}>
-            {entry.operator} GATE
+          <span style={{ fontWeight: 600, color: "var(--qarar-text)", textTransform: "uppercase", fontSize: "0.74rem" }}>
+            {entry.operator}
           </span>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginTop: "4px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "2px", marginTop: "2px" }}>
           {entry.children.map((child, i) => (
             <TraceNodeView key={i} entry={child} depth={depth + 1} theme={theme} />
           ))}
@@ -982,19 +1317,19 @@ function TraceNodeView({ entry, depth, theme }: { entry: TraceEntry; depth: numb
 
   if (entry.type === "between") {
     return (
-      <div style={{ marginLeft: `${depth * 14}px`, color: entry.passed ? theme.pass : theme.fail, margin: "4px 0" }}>
-        <span>{entry.passed ? "✓" : "✗"} </span>
-        <span style={{ color: theme.primaryLight }}>{entry.field}</span> between [{String(entry.min)}, {String(entry.max)}]
-        <span style={{ color: theme.textMuted }}> (actual: {JSON.stringify(entry.actual)})</span>
+      <div style={{ marginLeft: `${depth * 10}px`, margin: "3px 0", color: entry.passed ? "var(--qarar-pass)" : "var(--qarar-fail)" }}>
+        <span>{entry.passed ? "✓ " : "✗ "}</span>
+        <span style={{ color: "var(--qarar-text)" }}>{entry.field}</span> between [{String(entry.min)}, {String(entry.max)}]
+        <span style={{ color: "var(--qarar-text-muted)" }}> (value: {JSON.stringify(entry.actual)})</span>
       </div>
     );
   }
 
   return (
-    <div style={{ marginLeft: `${depth * 14}px`, color: entry.passed ? theme.pass : theme.fail, margin: "4px 0" }}>
-      <span>{entry.passed ? "✓" : "✗"} </span>
-      <span style={{ color: theme.primaryLight }}>{entry.field}</span> {entry.operator} {JSON.stringify(entry.expected)}
-      <span style={{ color: theme.textMuted }}> (actual: {JSON.stringify(entry.actual)})</span>
+    <div style={{ marginLeft: `${depth * 10}px`, margin: "3px 0", color: entry.passed ? "var(--qarar-pass)" : "var(--qarar-fail)" }}>
+      <span>{entry.passed ? "✓ " : "✗ "}</span>
+      <span style={{ color: "var(--qarar-text)" }}>{entry.field}</span> {entry.operator} {JSON.stringify(entry.expected)}
+      <span style={{ color: "var(--qarar-text-muted)" }}> (value: {JSON.stringify(entry.actual)})</span>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 {
   "name": "@qarar/sdk",
-  "version": "0.0.4",
+  "version": "0.1.0",
   "description": "Zero-dependency single-package Qarar SDK — portable AST, 6M ops/sec engine, SQL/Mongo pushdown & explainability",
   "keywords": [
     "rules-engine",
@@ -12,6 +12,15 @@
     "typescript"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mshehata-dev/qarar.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://github.com/mshehata-dev/qarar#readme",
+  "bugs": {
+    "url": "https://github.com/mshehata-dev/qarar/issues"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

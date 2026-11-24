@@ -120,3 +120,32 @@ export function createPricingTable(branchCount: number = 10): DecisionTable<{ di
 
 export const decisionTable10 = createPricingTable(10);
 export const decisionTable50 = createPricingTable(50);
+
+// ---------------------------------------------------------------------------
+// 5. Array, Date, and Dynamic Field Rules (Stress Test Targets)
+// ---------------------------------------------------------------------------
+
+export const arrayOperationsRule: Rule = rule("Array Operations Rule")
+  .id("array_ops_v1")
+  .where("cart.categories")
+  .arrayContains("electronics")
+  .and("cart.categories")
+  .arrayLengthGte(2)
+  .build();
+
+export const dateOperationsRule: Rule = rule("Date Window Operations Rule")
+  .id("date_ops_v1")
+  .where("order.createdAt")
+  .withinLast("30 days")
+  .and("user.registeredAt")
+  .olderThan("90 days")
+  .build();
+
+export const dynamicFieldRule: Rule = rule("Dynamic Two-Sided Field Rule")
+  .id("dynamic_field_v1")
+  .where("cart.total")
+  .lte("{{customer.creditLimit}}")
+  .and("cart.itemCount")
+  .lte("{{customer.maxItems}}")
+  .build();
+

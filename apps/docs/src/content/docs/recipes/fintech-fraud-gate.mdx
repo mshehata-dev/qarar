@@ -1,98 +1,92 @@
 ---
-title: FinTech Fraud Shield & Risk Routing
-description: Evaluate real-time transaction risk, flag anomalous devices, and route payments with dynamic decision tables.
+title: "FinTech Fraud & Risk Gates"
+description: "Screen financial transactions against dynamic compliance policies and risk thresholds with explainable failure reasons."
 ---
 
-import { Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+Financial institutions, payment gateways, and neobanks require instant transaction screening against regulatory compliance gates and fraud scoring thresholds.
 
-Financial applications require low-latency risk evaluation to prevent fraudulent chargebacks, account takeovers, and money laundering.
-
-This recipe demonstrates building a multi-signal fraud rule with nested boolean gates and routing payment outcomes using a decision table.
+Qarar delivers sub-microsecond risk checks with built-in audit traces explaining the exact reasons why a transaction was flagged or blocked.
 
 ---
 
-## 1. Multi-Signal Fraud Detection Rule
+## 1. High-Value Anti-Fraud Gate
 
-A rule that flags a transaction if:
-- Machine-learning risk score $\ge 700$, **OR**
-- Transaction amount $\ge \$5,000$ from an unrecognized device, **OR**
-- 24-hour transaction velocity $\ge 10$ for unverified KYC accounts
+This rule blocks transactions exceeding $5,000 if the user account is unverified, or if the transaction originates from a sanctioned country:
 
 ```ts
+// src/rules/fraudGate.ts
 import { rule, checkRule } from "@qarar/sdk";
 
-export const fraudShieldRule = rule("High-Risk Fraud Shield")
-  .id("fintech_fraud_v1")
-  .where("risk.score").gte(700)
+export const highValueFraudGate = rule("High Value Anti-Fraud Gate")
+  .id("fraud-gate-v1")
+  // Condition: Amount is safe OR user meets strict security criteria
+  .where("transaction.amount").lte(5000)
   .or(
     rule()
-      .where("transaction.amount").gte(5000)
-      .and("device.isRecognized").eq(false)
-  )
-  .or(
-    rule()
-      .where("velocity.count24h").gte(10)
-      .and("user.kycTier").eq("tier0")
+      .where("user.kycStatus").eq("verified")
+      .and("user.accountAgeDays").gte(90)
+      .and("transaction.country").notIn(["XX", "YY", "ZZ"])
+      .buildNode()
   )
   .build();
 ```
 
 ---
 
-## 2. Dynamic Risk Routing Table
-
-Instead of simple boolean pass/fail, financial systems route payments into distinct action workflows (`"APPROVE"`, `"SMS_CHALLENGE"`, `"MANUAL_REVIEW"`, `"BLOCK"`):
+## 2. Transaction Screening Service
 
 ```ts
-import { switchRule, evaluateDecisionTable } from "@qarar/sdk";
+// src/services/transactionScreener.ts
+import { checkRule } from "@qarar/sdk";
+import { highValueFraudGate } from "../rules/fraudGate";
 
-export interface RiskAction {
-  action: "APPROVE" | "CHALLENGE" | "MANUAL_REVIEW" | "BLOCK";
-  reason: string;
+export interface TransactionPayload {
+  amount: number;
+  country: string;
 }
 
-export const riskRouter = switchRule<RiskAction>("Transaction Risk Routing")
-  .default({ action: "APPROVE", reason: "Standard low-risk transaction" })
-  // 1. Critical fraud ➔ Immediate Block
-  .case("block-rule", { action: "BLOCK", reason: "Severe risk score or high velocity on unverified account" }, (c) =>
-    c.where("risk.score").gte(850).or(
-      rule().where("velocity.count24h").gte(15).and("user.kycTier").eq("tier0")
-    )
-  )
-  // 2. Medium risk ➔ Route to compliance team
-  .case("review-rule", { action: "MANUAL_REVIEW", reason: "High value transaction from new device" }, (c) =>
-    c.where("transaction.amount").gte(5000).and("device.isRecognized").eq(false)
-  )
-  // 3. Low-moderate risk ➔ Send 2FA SMS code
-  .case("challenge-rule", { action: "CHALLENGE", reason: "Elevated risk score requires secondary factor" }, (c) =>
-    c.where("risk.score").gte(600)
-  )
-  .build();
+export interface UserProfile {
+  kycStatus: "unverified" | "pending" | "verified";
+  accountAgeDays: number;
+}
+
+export function screenTransaction(tx: TransactionPayload, user: UserProfile) {
+  const context = { transaction: tx, user };
+
+  const evaluation = checkRule(highValueFraudGate, context);
+
+  if (!evaluation.result) {
+    return {
+      status: "FLAGGED_FOR_MANUAL_REVIEW",
+      decision: "BLOCKED",
+      reasons: evaluation.reasons, // Human-readable failure explanation
+      trace: evaluation.trace,     // Full audit trail
+    };
+  }
+
+  return {
+    status: "APPROVED",
+    decision: "PASSED",
+  };
+}
 ```
 
----
-
-## 3. High-Throughput Payment Evaluation Pipeline
-
-In your payment gateway microservice, evaluate transactions in sub-microsecond time:
+### Execution Example
 
 ```ts
-app.post("/api/payments/charge", async (req, res) => {
-  const transactionData = req.body;
+const suspiciousAttempt = screenTransaction(
+  { amount: 12500, country: "XX" },
+  { kycStatus: "unverified", accountAgeDays: 12 }
+);
 
-  // Evaluate risk table
-  const decision = evaluateDecisionTable(riskRouter, transactionData);
-
-  switch (decision.output.action) {
-    case "APPROVE":
-      return processPayment(transactionData);
-    case "CHALLENGE":
-      return triggerTwoFactorSMS(transactionData);
-    case "MANUAL_REVIEW":
-      await queueForComplianceAudit(transactionData, decision.output.reason);
-      return res.status(202).json({ status: "pending_review" });
-    case "BLOCK":
-      return res.status(403).json({ error: "Transaction declined by fraud shield" });
-  }
-});
+console.log(suspiciousAttempt);
+// {
+//   status: 'FLAGGED_FOR_MANUAL_REVIEW',
+//   decision: 'BLOCKED',
+//   reasons: [
+//     'transaction.amount (12500) must be <= 5000',
+//     'user.kycStatus ("unverified") must equal "verified"',
+//     'transaction.country ("XX") must not be in ["XX", "YY", "ZZ"]'
+//   ]
+// }
 ```

@@ -8,6 +8,8 @@ import {
   type DecisionBranch,
   type DecisionTable,
   validateDecisionTable,
+  extractFieldPath,
+  parseDynamicFieldExpression,
 } from "./spec.js";
 
 // ---------------------------------------------------------------------------
@@ -24,7 +26,8 @@ export type ValueInput =
   | Array<string | number | boolean | null | ScalarValue>;
 
 export function field(path: string): FieldNode {
-  return { type: "field", path };
+  const cleanPath = extractFieldPath(path) ?? path;
+  return { type: "field", path: cleanPath };
 }
 
 export function toValueNode(val: ValueInput): ValueNode {
@@ -45,7 +48,13 @@ export function toValueNode(val: ValueInput): ValueNode {
       values: val.map((item) => toValueNode(item) as ScalarValue),
     };
   }
-  if (typeof val === "string") return { type: "string", value: val };
+  if (typeof val === "string") {
+    const parsed = parseDynamicFieldExpression(val);
+    if (parsed && !parsed.offsetOperator) {
+      return { type: "field", path: parsed.path };
+    }
+    return { type: "string", value: val };
+  }
   if (typeof val === "number") return { type: "number", value: val };
   if (typeof val === "boolean") return { type: "boolean", value: val };
   if (val === null) return { type: "null" };
@@ -144,6 +153,63 @@ export class StandaloneFieldConditionBuilder {
   }
   isNotNull(): NodeBuilder {
     return this.createNode({ type: "isNotNull", left: this.leftNode, right: { type: "null" } });
+  }
+  arrayContains(right: ValueInput): NodeBuilder {
+    return this.createNode({ type: "arrayContains", left: this.leftNode, right: toValueNode(right) });
+  }
+  notArrayContains(right: ValueInput): NodeBuilder {
+    return this.createNode({ type: "notArrayContains", left: this.leftNode, right: toValueNode(right) });
+  }
+  arrayContainsAny(right: ValueInput): NodeBuilder {
+    return this.createNode({ type: "arrayContainsAny", left: this.leftNode, right: toValueNode(right) });
+  }
+  some(right: ValueInput): NodeBuilder {
+    return this.arrayContainsAny(right);
+  }
+  arrayContainsAll(right: ValueInput): NodeBuilder {
+    return this.createNode({ type: "arrayContainsAll", left: this.leftNode, right: toValueNode(right) });
+  }
+  every(right: ValueInput): NodeBuilder {
+    return this.arrayContainsAll(right);
+  }
+  arrayContainsNone(right: ValueInput): NodeBuilder {
+    return this.createNode({ type: "arrayContainsNone", left: this.leftNode, right: toValueNode(right) });
+  }
+  none(right: ValueInput): NodeBuilder {
+    return this.arrayContainsNone(right);
+  }
+  arrayIsEmpty(): NodeBuilder {
+    return this.createNode({ type: "arrayIsEmpty", left: this.leftNode, right: { type: "null" } });
+  }
+  arrayIsNotEmpty(): NodeBuilder {
+    return this.createNode({ type: "arrayIsNotEmpty", left: this.leftNode, right: { type: "null" } });
+  }
+  arrayLength(right: ValueInput): NodeBuilder {
+    return this.createNode({ type: "arrayLength", left: this.leftNode, right: toValueNode(right) });
+  }
+  arrayLengthGte(right: ValueInput): NodeBuilder {
+    return this.createNode({ type: "arrayLengthGte", left: this.leftNode, right: toValueNode(right) });
+  }
+  arrayLengthLte(right: ValueInput): NodeBuilder {
+    return this.createNode({ type: "arrayLengthLte", left: this.leftNode, right: toValueNode(right) });
+  }
+  arrayLengthGt(right: ValueInput): NodeBuilder {
+    return this.createNode({ type: "arrayLengthGt", left: this.leftNode, right: toValueNode(right) });
+  }
+  arrayLengthLt(right: ValueInput): NodeBuilder {
+    return this.createNode({ type: "arrayLengthLt", left: this.leftNode, right: toValueNode(right) });
+  }
+  before(right: ValueInput): NodeBuilder {
+    return this.createNode({ type: "before", left: this.leftNode, right: toValueNode(right) });
+  }
+  after(right: ValueInput): NodeBuilder {
+    return this.createNode({ type: "after", left: this.leftNode, right: toValueNode(right) });
+  }
+  olderThan(right: ValueInput): NodeBuilder {
+    return this.createNode({ type: "olderThan", left: this.leftNode, right: toValueNode(right) });
+  }
+  withinLast(right: ValueInput): NodeBuilder {
+    return this.createNode({ type: "withinLast", left: this.leftNode, right: toValueNode(right) });
   }
 }
 
@@ -274,6 +340,63 @@ export class ChainedFieldConditionBuilder {
   isNotNull(): NodeBuilder {
     return this.resolve({ type: "isNotNull", left: this.leftNode, right: { type: "null" } });
   }
+  arrayContains(right: ValueInput): NodeBuilder {
+    return this.resolve({ type: "arrayContains", left: this.leftNode, right: toValueNode(right) });
+  }
+  notArrayContains(right: ValueInput): NodeBuilder {
+    return this.resolve({ type: "notArrayContains", left: this.leftNode, right: toValueNode(right) });
+  }
+  arrayContainsAny(right: ValueInput): NodeBuilder {
+    return this.resolve({ type: "arrayContainsAny", left: this.leftNode, right: toValueNode(right) });
+  }
+  some(right: ValueInput): NodeBuilder {
+    return this.arrayContainsAny(right);
+  }
+  arrayContainsAll(right: ValueInput): NodeBuilder {
+    return this.resolve({ type: "arrayContainsAll", left: this.leftNode, right: toValueNode(right) });
+  }
+  every(right: ValueInput): NodeBuilder {
+    return this.arrayContainsAll(right);
+  }
+  arrayContainsNone(right: ValueInput): NodeBuilder {
+    return this.resolve({ type: "arrayContainsNone", left: this.leftNode, right: toValueNode(right) });
+  }
+  none(right: ValueInput): NodeBuilder {
+    return this.arrayContainsNone(right);
+  }
+  arrayIsEmpty(): NodeBuilder {
+    return this.resolve({ type: "arrayIsEmpty", left: this.leftNode, right: { type: "null" } });
+  }
+  arrayIsNotEmpty(): NodeBuilder {
+    return this.resolve({ type: "arrayIsNotEmpty", left: this.leftNode, right: { type: "null" } });
+  }
+  arrayLength(right: ValueInput): NodeBuilder {
+    return this.resolve({ type: "arrayLength", left: this.leftNode, right: toValueNode(right) });
+  }
+  arrayLengthGte(right: ValueInput): NodeBuilder {
+    return this.resolve({ type: "arrayLengthGte", left: this.leftNode, right: toValueNode(right) });
+  }
+  arrayLengthLte(right: ValueInput): NodeBuilder {
+    return this.resolve({ type: "arrayLengthLte", left: this.leftNode, right: toValueNode(right) });
+  }
+  arrayLengthGt(right: ValueInput): NodeBuilder {
+    return this.resolve({ type: "arrayLengthGt", left: this.leftNode, right: toValueNode(right) });
+  }
+  arrayLengthLt(right: ValueInput): NodeBuilder {
+    return this.resolve({ type: "arrayLengthLt", left: this.leftNode, right: toValueNode(right) });
+  }
+  before(right: ValueInput): NodeBuilder {
+    return this.resolve({ type: "before", left: this.leftNode, right: toValueNode(right) });
+  }
+  after(right: ValueInput): NodeBuilder {
+    return this.resolve({ type: "after", left: this.leftNode, right: toValueNode(right) });
+  }
+  olderThan(right: ValueInput): NodeBuilder {
+    return this.resolve({ type: "olderThan", left: this.leftNode, right: toValueNode(right) });
+  }
+  withinLast(right: ValueInput): NodeBuilder {
+    return this.resolve({ type: "withinLast", left: this.leftNode, right: toValueNode(right) });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -349,6 +472,63 @@ export class BoundFieldConditionBuilder {
   }
   isNotNull(): RuleBuilder {
     return this.addCondition({ type: "isNotNull", left: this.leftNode, right: { type: "null" } });
+  }
+  arrayContains(right: ValueInput): RuleBuilder {
+    return this.addCondition({ type: "arrayContains", left: this.leftNode, right: toValueNode(right) });
+  }
+  notArrayContains(right: ValueInput): RuleBuilder {
+    return this.addCondition({ type: "notArrayContains", left: this.leftNode, right: toValueNode(right) });
+  }
+  arrayContainsAny(right: ValueInput): RuleBuilder {
+    return this.addCondition({ type: "arrayContainsAny", left: this.leftNode, right: toValueNode(right) });
+  }
+  some(right: ValueInput): RuleBuilder {
+    return this.arrayContainsAny(right);
+  }
+  arrayContainsAll(right: ValueInput): RuleBuilder {
+    return this.addCondition({ type: "arrayContainsAll", left: this.leftNode, right: toValueNode(right) });
+  }
+  every(right: ValueInput): RuleBuilder {
+    return this.arrayContainsAll(right);
+  }
+  arrayContainsNone(right: ValueInput): RuleBuilder {
+    return this.addCondition({ type: "arrayContainsNone", left: this.leftNode, right: toValueNode(right) });
+  }
+  none(right: ValueInput): RuleBuilder {
+    return this.arrayContainsNone(right);
+  }
+  arrayIsEmpty(): RuleBuilder {
+    return this.addCondition({ type: "arrayIsEmpty", left: this.leftNode, right: { type: "null" } });
+  }
+  arrayIsNotEmpty(): RuleBuilder {
+    return this.addCondition({ type: "arrayIsNotEmpty", left: this.leftNode, right: { type: "null" } });
+  }
+  arrayLength(right: ValueInput): RuleBuilder {
+    return this.addCondition({ type: "arrayLength", left: this.leftNode, right: toValueNode(right) });
+  }
+  arrayLengthGte(right: ValueInput): RuleBuilder {
+    return this.addCondition({ type: "arrayLengthGte", left: this.leftNode, right: toValueNode(right) });
+  }
+  arrayLengthLte(right: ValueInput): RuleBuilder {
+    return this.addCondition({ type: "arrayLengthLte", left: this.leftNode, right: toValueNode(right) });
+  }
+  arrayLengthGt(right: ValueInput): RuleBuilder {
+    return this.addCondition({ type: "arrayLengthGt", left: this.leftNode, right: toValueNode(right) });
+  }
+  arrayLengthLt(right: ValueInput): RuleBuilder {
+    return this.addCondition({ type: "arrayLengthLt", left: this.leftNode, right: toValueNode(right) });
+  }
+  before(right: ValueInput): RuleBuilder {
+    return this.addCondition({ type: "before", left: this.leftNode, right: toValueNode(right) });
+  }
+  after(right: ValueInput): RuleBuilder {
+    return this.addCondition({ type: "after", left: this.leftNode, right: toValueNode(right) });
+  }
+  olderThan(right: ValueInput): RuleBuilder {
+    return this.addCondition({ type: "olderThan", left: this.leftNode, right: toValueNode(right) });
+  }
+  withinLast(right: ValueInput): RuleBuilder {
+    return this.addCondition({ type: "withinLast", left: this.leftNode, right: toValueNode(right) });
   }
 }
 

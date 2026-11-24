@@ -3,8 +3,12 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import react from '@astrojs/react';
 
+const site = process.env.DOCS_SITE || 'https://qarar.dev';
+const base = process.env.DOCS_BASE !== undefined ? (process.env.DOCS_BASE || undefined) : undefined;
+
 export default defineConfig({
-  site: 'https://qarar.dev',
+  site,
+  base,
   redirects: {
     '/theme': '/playground/',
     '/getting-started/': '/getting-started/quickstart/',

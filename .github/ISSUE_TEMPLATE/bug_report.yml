@@ -1,0 +1,55 @@
+name: 🐛 Bug Report
+description: File a bug report or unexpected behavior in Qarar
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug! Please ensure you have searched existing issues before submitting.
+  - type: dropdown
+    id: package
+    attributes:
+      label: Affected Package
+      description: Which package is experiencing the bug?
+      options:
+        - "@qarar/sdk"
+        - "@qarar/spec"
+        - "@qarar/engine-js"
+        - "@qarar/compiler-sql"
+        - "@qarar/compiler-mongo"
+        - "@qarar/react-builder"
+        - "@qarar/explainability"
+        - "@qarar/docs"
+        - "@qarar/playground"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal Reproduction Code / AST
+      description: Provide a minimal code snippet or JSON rule AST demonstrating the problem.
+      render: typescript
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen instead?
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment Info
+      description: "Node version, OS, pnpm/npm version (e.g. Node 22.2.0, macOS 14.5, pnpm 9.1)"
+    validations:
+      required: true

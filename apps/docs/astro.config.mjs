@@ -1,10 +1,68 @@
+import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import react from '@astrojs/react';
 
 const site = process.env.DOCS_SITE || 'https://qarar.dev';
 const base = process.env.DOCS_BASE !== undefined ? (process.env.DOCS_BASE || undefined) : undefined;
+
+function subpathPrefixPlugin() {
+  return {
+    name: 'subpath-prefix-plugin',
+    hooks: {
+      'astro:build:done': async ({ dir }) => {
+        const rawBase = process.env.DOCS_BASE;
+        if (!rawBase || rawBase === '/' || rawBase === '') return;
+        const cleanBase = rawBase.startsWith('/') ? rawBase : `/${rawBase}`;
+        const normalizedBase = cleanBase.endsWith('/') ? cleanBase.slice(0, -1) : cleanBase;
+        const subpath = normalizedBase.slice(1);
+
+        const targetDir = typeof dir === 'string' ? dir : fileURLToPath(dir);
+
+        function walk(currentDir) {
+          let results = [];
+          if (!fs.existsSync(currentDir)) return results;
+          const list = fs.readdirSync(currentDir);
+          for (const item of list) {
+            const fullPath = path.join(currentDir, item);
+            const stat = fs.statSync(fullPath);
+            if (stat && stat.isDirectory()) {
+              results = results.concat(walk(fullPath));
+            } else if (fullPath.endsWith('.html')) {
+              results.push(fullPath);
+            }
+          }
+          return results;
+        }
+
+        const files = walk(targetDir);
+
+        for (const file of files) {
+          let content = fs.readFileSync(file, 'utf8');
+          let modified = false;
+
+          const hrefRegex = new RegExp(`href="\\/(?!(${subpath}\\/|_astro\\/|favicon\\.svg|sitemap|#))([^"]*)"`, 'g');
+          if (hrefRegex.test(content)) {
+            content = content.replace(hrefRegex, `href="${normalizedBase}/$2"`);
+            modified = true;
+          }
+
+          const metaRegex = new RegExp(`content="0;url=\\/(?!${subpath}\\/)([^"]*)"`, 'g');
+          if (metaRegex.test(content)) {
+            content = content.replace(metaRegex, `content="0;url=${normalizedBase}/$1"`);
+            modified = true;
+          }
+
+          if (modified) {
+            fs.writeFileSync(file, content, 'utf8');
+          }
+        }
+      },
+    },
+  };
+}
 
 export default defineConfig({
   site,
@@ -88,6 +146,7 @@ export default defineConfig({
       customCss: ['./src/styles/custom.css'],
     }),
     react(),
+    subpathPrefixPlugin(),
   ],
   vite: {
     resolve: {

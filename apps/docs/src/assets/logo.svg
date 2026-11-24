@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 120" fill="none">
+  <!-- Top Logic Rail (Green / Truthy Branch) -->
+  <path d="M95 20 L21 20" stroke="#059669" stroke-width="14" stroke-linecap="round"/>
+  <!-- Central Logic Loop (Head of Qaf / Decision Node) -->
+  <circle cx="95" cy="60" r="40" stroke="#2563eb" stroke-width="14"/>
+  <!-- Bottom Logic Rail (Blue / Baseline Path) -->
+  <path d="M95 100 L14 100" stroke="#2563eb" stroke-width="14" stroke-linecap="round"/>
+</svg>

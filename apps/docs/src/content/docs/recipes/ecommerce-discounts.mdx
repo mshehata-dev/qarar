@@ -1,0 +1,103 @@
+---
+title: "E-Commerce Pricing Matrix"
+description: "Compute dynamic checkout discounts, promotional coupon tiers, and shipping perks using @qarar/sdk switchRule."
+---
+
+In modern e-commerce checkout funnels, discount rates and shipping perks vary dynamically according to customer loyalty tiers, order values, and geographical regions.
+
+Using Qarar's `switchRule()`, you can structure multi-branch pricing tables as clean, human-readable decision matrices.
+
+---
+
+## 1. Defining the Pricing Matrix
+
+```ts
+// src/rules/checkoutPricing.ts
+import { switchRule, rule, checkDecisionTable } from "@qarar/sdk";
+
+export interface PricingOutput {
+  discountPercent: number;
+  freeShipping: boolean;
+  tierLabel: string;
+}
+
+export const checkoutPricingMatrix = switchRule<PricingOutput>("Customer Checkout Matrix")
+  .id("checkout-pricing-matrix-v1")
+  // Case 1: VIP customers spending $200+
+  .case(
+    "vip-high-value",
+    rule().where("customer.tier").eq("vip").and("cart.total").gte(200)
+  )
+  .then({ discountPercent: 25, freeShipping: true, tierLabel: "VIP Platinum" })
+
+  // Case 2: VIP customers spending under $200
+  .case(
+    "vip-standard",
+    rule().where("customer.tier").eq("vip")
+  )
+  .then({ discountPercent: 15, freeShipping: true, tierLabel: "VIP Gold" })
+
+  // Case 3: Regular customers spending $150+
+  .case(
+    "regular-high-value",
+    rule().where("cart.total").gte(150)
+  )
+  .then({ discountPercent: 10, freeShipping: true, tierLabel: "Volume Shopper" })
+
+  // Case 4: Default fallback
+  .default({ discountPercent: 0, freeShipping: false, tierLabel: "Standard" })
+  .build();
+```
+
+---
+
+## 2. Checkout Evaluation
+
+Evaluate the incoming shopping cart during checkout calculation:
+
+```ts
+// src/services/checkoutService.ts
+import { checkDecisionTable } from "@qarar/sdk";
+import { checkoutPricingMatrix, PricingOutput } from "../rules/checkoutPricing";
+
+export function calculateCartTotal(cart: { total: number }, customer: { tier: string }) {
+  const context = { cart, customer };
+
+  const decision = checkDecisionTable(checkoutPricingMatrix, context);
+  const pricing: PricingOutput = decision.output;
+
+  const discountAmount = (cart.total * pricing.discountPercent) / 100;
+  const finalTotal = cart.total - discountAmount;
+  const shippingFee = pricing.freeShipping ? 0 : 9.99;
+
+  return {
+    matchedBranch: decision.matchedBranch?.id,
+    tierLabel: pricing.tierLabel,
+    subtotal: cart.total,
+    discountPercent: pricing.discountPercent,
+    discountAmount,
+    shippingFee,
+    finalTotal: finalTotal + shippingFee,
+  };
+}
+```
+
+### Execution Example
+
+```ts
+const result = calculateCartTotal(
+  { total: 250 },
+  { tier: "vip" }
+);
+
+console.log(result);
+// {
+//   matchedBranch: 'vip-high-value',
+//   tierLabel: 'VIP Platinum',
+//   subtotal: 250,
+//   discountPercent: 25,
+//   discountAmount: 62.5,
+//   shippingFee: 0,
+//   finalTotal: 187.5
+// }
+```

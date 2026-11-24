@@ -1,0 +1,92 @@
+---
+title: "FinTech Fraud & Risk Gates"
+description: "Screen financial transactions against dynamic compliance policies and risk thresholds with explainable failure reasons."
+---
+
+Financial institutions, payment gateways, and neobanks require instant transaction screening against regulatory compliance gates and fraud scoring thresholds.
+
+Qarar delivers sub-microsecond risk checks with built-in audit traces explaining the exact reasons why a transaction was flagged or blocked.
+
+---
+
+## 1. High-Value Anti-Fraud Gate
+
+This rule blocks transactions exceeding $5,000 if the user account is unverified, or if the transaction originates from a sanctioned country:
+
+```ts
+// src/rules/fraudGate.ts
+import { rule, checkRule } from "@qarar/sdk";
+
+export const highValueFraudGate = rule("High Value Anti-Fraud Gate")
+  .id("fraud-gate-v1")
+  // Condition: Amount is safe OR user meets strict security criteria
+  .where("transaction.amount").lte(5000)
+  .or(
+    rule()
+      .where("user.kycStatus").eq("verified")
+      .and("user.accountAgeDays").gte(90)
+      .and("transaction.country").notIn(["XX", "YY", "ZZ"])
+      .buildNode()
+  )
+  .build();
+```
+
+---
+
+## 2. Transaction Screening Service
+
+```ts
+// src/services/transactionScreener.ts
+import { checkRule } from "@qarar/sdk";
+import { highValueFraudGate } from "../rules/fraudGate";
+
+export interface TransactionPayload {
+  amount: number;
+  country: string;
+}
+
+export interface UserProfile {
+  kycStatus: "unverified" | "pending" | "verified";
+  accountAgeDays: number;
+}
+
+export function screenTransaction(tx: TransactionPayload, user: UserProfile) {
+  const context = { transaction: tx, user };
+
+  const evaluation = checkRule(highValueFraudGate, context);
+
+  if (!evaluation.result) {
+    return {
+      status: "FLAGGED_FOR_MANUAL_REVIEW",
+      decision: "BLOCKED",
+      reasons: evaluation.reasons, // Human-readable failure explanation
+      trace: evaluation.trace,     // Full audit trail
+    };
+  }
+
+  return {
+    status: "APPROVED",
+    decision: "PASSED",
+  };
+}
+```
+
+### Execution Example
+
+```ts
+const suspiciousAttempt = screenTransaction(
+  { amount: 12500, country: "XX" },
+  { kycStatus: "unverified", accountAgeDays: 12 }
+);
+
+console.log(suspiciousAttempt);
+// {
+//   status: 'FLAGGED_FOR_MANUAL_REVIEW',
+//   decision: 'BLOCKED',
+//   reasons: [
+//     'transaction.amount (12500) must be <= 5000',
+//     'user.kycStatus ("unverified") must equal "verified"',
+//     'transaction.country ("XX") must not be in ["XX", "YY", "ZZ"]'
+//   ]
+// }
+```

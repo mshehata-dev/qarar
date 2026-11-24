@@ -1,14 +1,26 @@
 {
   "name": "@qarar/sdk",
-  "version": "0.0.4",
-  "description": "Single-package Qarar SDK (spec + engine + explainability)",
+  "version": "0.1.0",
+  "description": "Zero-dependency single-package Qarar SDK — portable AST, 6M ops/sec engine, SQL/Mongo pushdown & explainability",
   "keywords": [
     "rules-engine",
     "business-rules",
     "decision-engine",
+    "zero-dependencies",
+    "ast",
+    "sql-pushdown",
     "typescript"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mshehata-dev/qarar.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://github.com/mshehata-dev/qarar#readme",
+  "bugs": {
+    "url": "https://github.com/mshehata-dev/qarar/issues"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -32,22 +44,39 @@
     "./explainability": {
       "import": "./dist/explainability.js",
       "types": "./dist/explainability.d.ts"
+    },
+    "./builder": {
+      "import": "./dist/builder.js",
+      "types": "./dist/builder.d.ts"
+    },
+    "./sql": {
+      "import": "./dist/sql.js",
+      "types": "./dist/sql.d.ts"
+    },
+    "./mongo": {
+      "import": "./dist/mongo.js",
+      "types": "./dist/mongo.d.ts"
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "dev": "tsc -p tsconfig.json --watch",
+    "dev": "tsup --watch",
     "test": "vitest run",
+    "lint": "biome lint .",
     "prepublishOnly": "pnpm run build && pnpm run test"
   },
   "publishConfig": {
     "access": "public"
   },
-  "dependencies": {
-    "zod": "^3.24.1"
-  },
+  "dependencies": {},
   "devDependencies": {
+    "@qarar/compiler-mongo": "workspace:*",
+    "@qarar/compiler-sql": "workspace:*",
+    "@qarar/engine-js": "workspace:*",
+    "@qarar/explainability": "workspace:*",
+    "@qarar/spec": "workspace:*",
+    "tsup": "^9.0.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }

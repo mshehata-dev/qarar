@@ -1,12 +1,13 @@
 {
   "name": "qarar-published-test-app",
   "private": true,
-  "version": "0.0.4",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "start": "node index.mjs"
+    "start": "node index.mjs",
+    "lint": "biome lint ."
   },
   "dependencies": {
-    "@qarar/sdk": "^0.0.2"
+    "@qarar/sdk": "file:../../packages/sdk"
   }
 }

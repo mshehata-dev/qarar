@@ -1,0 +1,28 @@
+{
+  "name": "@qarar/theme",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Unified Design Tokens and Stylesheets for Qarar Platform",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "theme.css"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./theme.css": "./theme.css"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome lint ."
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

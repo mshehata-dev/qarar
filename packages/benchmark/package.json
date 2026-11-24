@@ -1,0 +1,38 @@
+{
+  "name": "@qarar/benchmark",
+  "version": "0.1.0",
+  "private": true,
+  "description": "High-throughput performance benchmarking and large dataset stress testing suite for Qarar",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "qarar-bench": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "bench": "node dist/cli.js",
+    "bench:dataset": "node dist/cli.js --suite dataset",
+    "bench:micro": "node dist/cli.js --suite micro",
+    "bench:decision": "node dist/cli.js --suite decision",
+    "test": "vitest run",
+    "lint": "biome lint .",
+    "prebench": "pnpm run build"
+  },
+  "dependencies": {
+    "@qarar/compiler-mongo": "workspace:*",
+    "@qarar/compiler-sql": "workspace:*",
+    "@qarar/engine-js": "workspace:*",
+    "@qarar/explainability": "workspace:*",
+    "@qarar/sdk": "workspace:*",
+    "@qarar/spec": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

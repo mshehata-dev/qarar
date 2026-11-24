@@ -1,0 +1,168 @@
+---
+title: "Quickstart & Setup"
+description: "Install @qarar/sdk, build your first dynamic rule, evaluate payloads in-memory, and compile to SQL/Mongo in minutes."
+---
+
+import { Steps, Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
+
+Qarar lets you decouple business rules from application code. Store rules as portable JSON in your database, evaluate incoming payloads in Node.js, and compile directly to SQL or MongoDB pushdown queries.
+
+---
+
+<Steps>
+
+1. ### Installation
+
+   Install the official SDK package:
+
+   <Tabs>
+     <TabItem label="pnpm">
+       ```bash
+       pnpm add @qarar/sdk
+       ```
+     </TabItem>
+     <TabItem label="npm">
+       ```bash
+       npm install @qarar/sdk
+       ```
+     </TabItem>
+     <TabItem label="yarn">
+       ```bash
+       yarn add @qarar/sdk
+       ```
+     </TabItem>
+   </Tabs>
+
+2. ### Define Your First Rule
+
+   Use the fluent `rule()` builder to construct a rule:
+
+   ```ts
+   import { rule } from "@qarar/sdk";
+
+   export const promoRule = rule("Summer VIP Promo")
+     .id("promo_summer_2026")
+     .description("Grants 20% discount to VIP members with carts over $100")
+     .where("customer.age").gte(18)
+     .and("customer.tier").in(["gold", "vip"])
+     .and("cart.total").gte(100)
+     .build();
+   ```
+
+   Calling `.build()` produces a portable, technology-agnostic **JSON Abstract Syntax Tree (AST)** that you can store in PostgreSQL `jsonb`, MongoDB, or Redis:
+
+   <details>
+   <summary>View Generated JSON AST</summary>
+
+   ```json
+   {
+     "id": "promo_summer_2026",
+     "name": "Summer VIP Promo",
+     "description": "Grants 20% discount to VIP members with carts over $100",
+     "version": "1",
+     "root": {
+       "type": "and",
+       "conditions": [
+         {
+           "type": "gte",
+           "left": { "type": "field", "path": "customer.age" },
+           "right": { "type": "number", "value": 18 }
+         },
+         {
+           "type": "in",
+           "left": { "type": "field", "path": "customer.tier" },
+           "right": {
+             "type": "array",
+             "values": [
+               { "type": "string", "value": "gold" },
+               { "type": "string", "value": "vip" }
+             ]
+           }
+         },
+         {
+           "type": "gte",
+           "left": { "type": "field", "path": "cart.total" },
+           "right": { "type": "number", "value": 100 }
+         }
+       ]
+     }
+   }
+   ```
+
+   </details>
+
+3. ### Evaluate and Inspect Human Explanations
+
+   Pass the rule and any JavaScript object to `checkRule`. It returns both a boolean `result` and human-readable `reasons` explaining why conditions failed:
+
+   ```ts
+   import { checkRule } from "@qarar/sdk";
+
+   const incomingCart = {
+     customer: { age: 24, tier: "bronze" },
+     cart: { total: 150 },
+   };
+
+   const check = checkRule(promoRule, incomingCart);
+
+   console.log("Passed:", check.result);
+   // ➔ Passed: false
+
+   console.log("Failure Reasons:", check.reasons);
+   // ➔ Failure Reasons: ['customer.tier: "bronze" is not in [gold, vip]']
+   ```
+
+4. ### Push Rule to Database Queries
+
+   Instead of pulling thousands of records into Node.js to filter them in memory, compile the rule into a database query:
+
+   <Tabs>
+     <TabItem label="SQL (Postgres / MySQL / SQLite)">
+       ```ts
+       import { compileToSQL } from "@qarar/sdk";
+
+       const { sql } = compileToSQL(promoRule, { columnStyle: "snake" });
+       console.log(sql);
+       // ➔ customer_age >= 18 AND customer_tier IN ('gold', 'vip') AND cart_total >= 100
+
+       // Query database directly
+       const eligibleUsers = await db.query(
+         `SELECT id, email FROM customers WHERE ${sql}`
+       );
+       ```
+     </TabItem>
+     <TabItem label="MongoDB">
+       ```ts
+       import { compileToMongo } from "@qarar/sdk";
+
+       const { filter } = compileToMongo(promoRule);
+       
+       // Query MongoDB collection directly
+       const eligibleUsers = await db.collection("customers").find(filter).toArray();
+       ```
+     </TabItem>
+   </Tabs>
+
+5. ### Enable Zero-Deploy Updates
+
+   1. **Save Rule as JSON** in a `rules` table in PostgreSQL (`jsonb`) or MongoDB.
+   2. **Fetch dynamically** at application startup and cache in memory.
+   3. **Invalidate Cache** via webhook or Pub/Sub when a rule is modified in your admin UI.
+   4. **Result**: Business rules change live in production without server restarts or CI/CD pipelines.
+
+</Steps>
+
+---
+
+## Next Steps
+
+<CardGrid>
+  <Card title="Rule Engine & Evaluation">
+    Deep dive into operators, nested logic groups, and execution traces.
+    [View Engine Guide →](/concepts/engine-and-evaluation/)
+  </Card>
+  <Card title="Decision Tables & Switch Cases">
+    Replace switch-case statements with dynamic multi-branch decision matrices.
+    [View Switch Rules →](/concepts/decision-tables-switch-cases/)
+  </Card>
+</CardGrid>

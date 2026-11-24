@@ -1,0 +1,48 @@
+{
+  "name": "@qarar/react-builder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Embeddable React Visual Rule Builder for Qarar AST",
+  "keywords": [
+    "qarar",
+    "react",
+    "rule-builder",
+    "visual-builder"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsc -p tsconfig.json --watch",
+    "test": "vitest run",
+    "lint": "biome lint ."
+  },
+  "dependencies": {
+    "@qarar/spec": "workspace:*",
+    "@qarar/theme": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,4 +1,4 @@
-import type { RuleNode, ValueNode } from "@qarar/spec";
+import { type RuleNode, type ValueNode, extractFieldPath, parseDynamicFieldExpression } from "@qarar/spec";
 
 // ---------------------------------------------------------------------------
 // Options
@@ -51,8 +51,17 @@ function compileLiteral(node: ValueNode, colStyle: "path" | "snake" | "quote"): 
   switch (node.type) {
     case "field":
       return columnName(node.path, colStyle);
-    case "string":
+    case "string": {
+      const parsed = parseDynamicFieldExpression(node.value);
+      if (parsed) {
+        const col = columnName(parsed.path, colStyle);
+        if (parsed.offsetOperator && parsed.offsetDuration) {
+          return `${col} ${parsed.offsetOperator} INTERVAL '${parsed.offsetDuration}'`;
+        }
+        return col;
+      }
       return escapeString(node.value);
+    }
     case "number":
       return String(node.value);
     case "boolean":
@@ -65,7 +74,11 @@ function compileLiteral(node: ValueNode, colStyle: "path" | "snake" | "quote"): 
         node.values
           .map((v) => {
             if (v.type === "null") return "NULL";
-            if (v.type === "string") return escapeString(v.value);
+            if (v.type === "string") {
+              const dynamicField = extractFieldPath(v.value);
+              if (dynamicField) return columnName(dynamicField, colStyle);
+              return escapeString(v.value);
+            }
             return String(v.value);
           })
           .join(", ") +
@@ -151,6 +164,72 @@ function compileNode(
   if (node.type === "notIn") {
     const list = compileLiteral(node.right, colStyle);
     return `${col} NOT IN ${list}`;
+  }
+
+  // Array operations
+  if (node.type === "arrayContains") {
+    const item = compileLiteral(node.right, colStyle);
+    return `${item} = ANY(${col})`;
+  }
+  if (node.type === "notArrayContains") {
+    const item = compileLiteral(node.right, colStyle);
+    return `NOT (${item} = ANY(${col}))`;
+  }
+  if (node.type === "arrayContainsAny") {
+    const list = compileLiteral(node.right, colStyle);
+    return `${col} && ARRAY${list}`;
+  }
+  if (node.type === "arrayContainsAll") {
+    const list = compileLiteral(node.right, colStyle);
+    return `${col} @> ARRAY${list}`;
+  }
+  if (node.type === "arrayContainsNone") {
+    const list = compileLiteral(node.right, colStyle);
+    return `NOT (${col} && ARRAY${list})`;
+  }
+  if (node.type === "arrayIsEmpty") {
+    return `(ARRAY_LENGTH(${col}, 1) IS NULL OR ARRAY_LENGTH(${col}, 1) = 0)`;
+  }
+  if (node.type === "arrayIsNotEmpty") {
+    return `(ARRAY_LENGTH(${col}, 1) > 0)`;
+  }
+  if (node.type === "arrayLength") {
+    const len = compileLiteral(node.right, colStyle);
+    return `ARRAY_LENGTH(${col}, 1) = ${len}`;
+  }
+  if (node.type === "arrayLengthGte") {
+    const len = compileLiteral(node.right, colStyle);
+    return `ARRAY_LENGTH(${col}, 1) >= ${len}`;
+  }
+  if (node.type === "arrayLengthLte") {
+    const len = compileLiteral(node.right, colStyle);
+    return `ARRAY_LENGTH(${col}, 1) <= ${len}`;
+  }
+  if (node.type === "arrayLengthGt") {
+    const len = compileLiteral(node.right, colStyle);
+    return `ARRAY_LENGTH(${col}, 1) > ${len}`;
+  }
+  if (node.type === "arrayLengthLt") {
+    const len = compileLiteral(node.right, colStyle);
+    return `ARRAY_LENGTH(${col}, 1) < ${len}`;
+  }
+
+  // Date operations
+  if (node.type === "before") {
+    const val = compileLiteral(node.right, colStyle);
+    return `${col} < ${val}`;
+  }
+  if (node.type === "after") {
+    const val = compileLiteral(node.right, colStyle);
+    return `${col} > ${val}`;
+  }
+  if (node.type === "olderThan") {
+    const val = compileLiteral(node.right, colStyle);
+    return `${col} < (NOW() - INTERVAL ${val})`;
+  }
+  if (node.type === "withinLast") {
+    const val = compileLiteral(node.right, colStyle);
+    return `${col} >= (NOW() - INTERVAL ${val})`;
   }
 
   // Standard comparison

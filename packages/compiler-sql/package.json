@@ -1,11 +1,14 @@
 {
   "name": "@qarar/compiler-sql",
+  "version": "0.1.0",
   "private": true,
-  "version": "0.0.4",
   "description": "Qarar → SQL WHERE clause compiler",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "import": "./dist/index.js",
@@ -16,7 +19,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsc -p tsconfig.json --watch",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "biome lint ."
   },
   "dependencies": {
     "@qarar/spec": "workspace:*"

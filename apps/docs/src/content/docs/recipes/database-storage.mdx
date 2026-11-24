@@ -1,0 +1,113 @@
+---
+title: "Database Storage & Redis Cache"
+description: "Persist dynamic business rules in PostgreSQL JSONB or MongoDB, and maintain high-speed evaluation with Redis cache invalidation."
+---
+
+One of Qarar's greatest strengths is that rules are pure JSON ASTs (`Rule` / `DecisionTable`). You can store them in relational databases (PostgreSQL `jsonb`), document databases (MongoDB), or CMS systems, enabling non-technical operators to modify business criteria with zero code deployments.
+
+---
+
+## 1. PostgreSQL Schema with `jsonb`
+
+Create a table to store rule versions:
+
+```sql
+CREATE TABLE business_rules (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    version VARCHAR(16) NOT NULL DEFAULT '1',
+    rule_type VARCHAR(32) NOT NULL DEFAULT 'standard', -- 'standard' or 'matrix'
+    ast JSONB NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_rules_active ON business_rules (id) WHERE is_active = true;
+```
+
+---
+
+## 2. Safe Storage with Schema Validation
+
+Always validate the JSON AST using `@qarar/sdk` before persisting to database storage:
+
+```ts
+// src/services/ruleService.ts
+import { validateRule, type Rule } from "@qarar/sdk";
+import { pgPool } from "../db";
+
+export async function saveRule(rulePayload: unknown): Promise<Rule> {
+  // 1. Enforce strict AST validation
+  const validRule = validateRule(rulePayload);
+
+  // 2. Persist to PostgreSQL jsonb
+  const query = `
+    INSERT INTO business_rules (id, name, version, ast, is_active, updated_at)
+    VALUES ($1, $2, $3, $4, true, NOW())
+    ON CONFLICT (id) DO UPDATE SET
+      name = EXCLUDED.name,
+      version = EXCLUDED.version,
+      ast = EXCLUDED.ast,
+      updated_at = NOW()
+    RETURNING ast;
+  `;
+
+  await pgPool.query(query, [
+    validRule.id,
+    validRule.name,
+    validRule.version,
+    JSON.stringify(validRule),
+  ]);
+
+  return validRule;
+}
+```
+
+---
+
+## 3. High-Speed In-Memory Cache with Redis Invalidation
+
+To maintain millions of evaluations per second, keep compiled closures in local memory and invalidate when a change event arrives via Redis Pub/Sub:
+
+```ts
+// src/services/ruleEngineCache.ts
+import { compileRule, type Rule, type CompiledRule } from "@qarar/sdk";
+import Redis from "ioredis";
+import { pgPool } from "../db";
+
+const redisSubscriber = new Redis(process.env.REDIS_URL!);
+const localCompiledCache = new Map<string, CompiledRule>();
+
+/**
+ * Retrieves the compiled closure from local memory, loading from DB on cache miss.
+ */
+export async function getCompiledRule(ruleId: string): Promise<CompiledRule> {
+  if (localCompiledCache.has(ruleId)) {
+    return localCompiledCache.get(ruleId)!;
+  }
+
+  const res = await pgPool.query(
+    "SELECT ast FROM business_rules WHERE id = $1 AND is_active = true",
+    [ruleId]
+  );
+
+  if (res.rows.length === 0) {
+    throw new Error(`Rule ${ruleId} not found or inactive`);
+  }
+
+  const ruleObj: Rule = res.rows[0].ast;
+  const compiled = compileRule(ruleObj);
+  localCompiledCache.set(ruleId, compiled);
+
+  return compiled;
+}
+
+// Invalidate local memory when another service publishes an update
+redisSubscriber.subscribe("rules:invalidated");
+redisSubscriber.on("message", (channel, ruleId) => {
+  if (channel === "rules:invalidated") {
+    localCompiledCache.delete(ruleId);
+  }
+});
+```

@@ -3,6 +3,8 @@
  * Each example has a rule AST + matching test data.
  */
 
+import { qararTokens } from "@qarar/theme";
+
 export interface Example {
   id: string;
   name: string;
@@ -256,11 +258,11 @@ export const EXAMPLES: Example[] = [
 export const EXAMPLE_MAP = Object.fromEntries(EXAMPLES.map((e) => [e.id, e]));
 
 export const CATEGORY_COLORS: Record<string, string> = {
-  Start: "#22c55e",
-  Access: "#6c8ef5",
-  Risk: "#f87171",
-  Promotions: "#34d399",
-  Compliance: "#f5a623",
-  Growth: "#a78bfa",
-  Operations: "#64748b",
+  Start: qararTokens.dark.pass,
+  Access: qararTokens.dark.primary,
+  Risk: qararTokens.dark.fail,
+  Promotions: qararTokens.dark.pass,
+  Compliance: qararTokens.dark.warn,
+  Growth: qararTokens.dark.accent,
+  Operations: qararTokens.dark.textMuted,
 };

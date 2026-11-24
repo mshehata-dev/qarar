@@ -1,0 +1,107 @@
+---
+title: "Zero-Deploy Dynamic Business Rules in JSON"
+description: "Dynamic business rules in JSON. Zero server redeploys."
+template: splash
+hero:
+  tagline: "Decouple business logic from application code. Store rules in your database, evaluate in memory, or compile directly to SQL and MongoDB queries."
+  actions:
+    - text: "Get Started"
+      link: /getting-started/quickstart/
+      icon: right-arrow
+      variant: primary
+    - text: "Try Playground"
+      link: /playground/
+      icon: external
+    - text: "GitHub"
+      link: https://github.com/mshehata-dev/qarar
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import ArchitectureInfographic from '../../components/ArchitectureInfographic';
+
+<ArchitectureInfographic />
+
+---
+
+## Why Qarar?
+
+Hardcoded `if/else` chains tie business rule updates to software release cycles. A routine change to discount tiers, fraud score thresholds, or access policies requires a code commit, pull request review, and server redeployment.
+
+Qarar treats business rules as portable, technology-agnostic JSON trees. Store rules in PostgreSQL, MongoDB, or Redis, and evaluate them dynamically at runtime:
+
+- **No deployments for logic changes**: Update rule definitions in your database or admin UI; production services apply them immediately.
+- **Run in-memory or in database**: Check incoming payloads in Node.js or push the rule down into a SQL `WHERE` clause or MongoDB query filter.
+- **Built-in explanations**: When a rule evaluation fails, Qarar returns the exact condition that failed in plain language for audit logs and customer support.
+
+---
+
+## How It Works
+
+Define a rule using the fluent builder (or load pre-stored JSON AST from your database), evaluate against input data, and receive a boolean verdict with failure triage:
+
+```ts
+import { checkRule, rule } from "@qarar/sdk";
+
+// 1. Define rule (or load JSON AST from your database)
+const loyaltyDiscount = rule("Loyalty Checkout Discount")
+  .where("user.tier").in(["gold", "vip"])
+  .and("cart.total").gte(100)
+  .build();
+
+// 2. Evaluate incoming payload
+const { result, reasons } = checkRule(loyaltyDiscount, {
+  user: { tier: "bronze" },
+  cart: { total: 150 }
+});
+
+console.log(result);  // false
+console.log(reasons); // ['user.tier: "bronze" is not in [gold, vip]']
+```
+
+---
+
+## Capabilities
+
+<CardGrid>
+  <Card title="Zero-Deploy Logic">
+    Store rules as standard JSON in PostgreSQL, MongoDB, or Redis. Update business logic live without rebuilding or redeploying code.
+  </Card>
+  <Card title="Database Pushdown">
+    Compile the same rule AST into parameterized SQL `WHERE` clauses or MongoDB filter objects to filter data directly in the database.
+  </Card>
+  <Card title="Audit Explanations">
+    Generate human-readable failure explanations automatically. Know exactly why an order was flagged or a user was denied without log grepping.
+  </Card>
+  <Card title="Sandboxed Evaluation">
+    Safe evaluation with zero `eval()` and guarded field lookups that prevent prototype pollution. Guaranteed deterministic termination.
+  </Card>
+</CardGrid>
+
+---
+
+## Next Steps
+
+<CardGrid>
+  <LinkCard
+    title="Quickstart Guide"
+    description="Install the SDK and evaluate your first rule in under 5 minutes."
+    href="/getting-started/quickstart/"
+  />
+  <LinkCard
+    title="Interactive Playground"
+    description="Test rules, inspect execution traces, and compile SQL/Mongo queries live in your browser."
+    href="/playground/"
+  />
+  <LinkCard
+    title="Core Concepts"
+    description="Deep dive into the AST specification, rule engine, and query pushdown compilers."
+    href="/concepts/ast-specification/"
+  />
+  <LinkCard
+    title="Production Recipes"
+    description="Practical patterns for SaaS entitlements, fraud gates, e-commerce discounts, and database rules."
+    href="/recipes/dynamic-db-rules/"
+  />
+</CardGrid>

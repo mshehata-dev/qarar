@@ -40,7 +40,9 @@ function csvToObject(csv: string): Record<string, unknown> {
   const headers = firstLine.map((h) => h.trim().replace(/"/g, ""));
   const dataRow = lines[1]?.split(",").map((v) => v.trim().replace(/"/g, "")) ?? [];
   const result: Record<string, unknown> = {};
-  headers.forEach((h, i) => setNested(result, h, parseValue(dataRow[i] ?? "")));
+  headers.forEach((h, i) => {
+    setNested(result, h, parseValue(dataRow[i] ?? ""));
+  });
   return result;
 }
 
@@ -50,7 +52,7 @@ function parseValue(raw: string): unknown {
   if (lower === "false") return false;
   if (lower === "null" || lower === "") return null;
   const num = Number(raw);
-  if (!isNaN(num) && raw.trim() !== "") return num;
+  if (!Number.isNaN(num) && raw.trim() !== "") return num;
   return raw;
 }
 

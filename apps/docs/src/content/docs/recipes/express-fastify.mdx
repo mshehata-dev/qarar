@@ -1,0 +1,157 @@
+---
+title: "Express & Fastify Middleware"
+description: "Protect HTTP routes dynamically in Express and Fastify using pre-compiled Qarar rules with automated 403 reason extraction."
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Enforce business policies directly at the HTTP routing layer. If an incoming request violates a rule, reject it with HTTP 403 and return plain-English explainability reasons to help the client understand why.
+
+---
+
+## 1. Express Middleware Guard
+
+Create a reusable higher-order middleware that evaluates incoming request data (authenticated user, payload body, headers, or query parameters):
+
+```ts
+// src/middleware/ruleGuard.ts
+import { Request, Response, NextFunction } from "express";
+import { Rule, checkRule } from "@qarar/sdk";
+
+export function createRuleGuard(rule: Rule) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const context = {
+      user: (req as any).user,
+      body: req.body,
+      query: req.query,
+      params: req.params,
+      headers: req.headers,
+    };
+
+    const decision = checkRule(rule, context);
+
+    if (!decision.result) {
+      return res.status(403).json({
+        error: "Forbidden",
+        ruleId: rule.id,
+        ruleName: rule.name,
+        reasons: decision.reasons,
+      });
+    }
+
+    next();
+  };
+}
+```
+
+### Route Registration
+
+```ts
+// src/routes/system.ts
+import express from "express";
+import { rule } from "@qarar/sdk";
+import { createRuleGuard } from "../middleware/ruleGuard";
+
+const router = express.Router();
+
+// Rule: Only active Admins with 2FA enabled can purge production cache
+const adminCachePurgeRule = rule("Admin 2FA Gate")
+  .id("admin-2fa-gate")
+  .where("user.role").eq("admin")
+  .and("user.mfaEnabled").eq(true)
+  .and("user.status").eq("active")
+  .build();
+
+router.post(
+  "/api/system/purge-cache",
+  createRuleGuard(adminCachePurgeRule),
+  (req, res) => {
+    res.json({ success: true, message: "System cache purged successfully" });
+  }
+);
+
+export default router;
+```
+
+---
+
+## 2. Fastify Pre-Handler Hook
+
+Fastify hooks provide fast execution with minimal overhead:
+
+```ts
+// src/plugins/ruleGuard.ts
+import { FastifyRequest, FastifyReply } from "fastify";
+import { Rule, checkRule } from "@qarar/sdk";
+
+export function fastifyRuleGuard(rule: Rule) {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    const context = {
+      user: (request as any).user,
+      body: request.body,
+      query: request.query,
+      params: request.params,
+    };
+
+    const decision = checkRule(rule, context);
+
+    if (!decision.result) {
+      return reply.code(403).send({
+        statusCode: 403,
+        error: "Forbidden",
+        ruleId: rule.id,
+        message: "Request failed business policy verification",
+        reasons: decision.reasons,
+      });
+    }
+  };
+}
+```
+
+### Fastify Route Usage
+
+```ts
+import Fastify from "fastify";
+import { rule } from "@qarar/sdk";
+import { fastifyRuleGuard } from "./plugins/ruleGuard";
+
+const fastify = Fastify({ logger: true });
+
+const highTierExport = rule("Data Export Entitlement")
+  .where("user.plan").in(["enterprise", "scale"])
+  .and("user.seats").gte(5)
+  .build();
+
+fastify.post(
+  "/api/reports/export",
+  { preHandler: [fastifyRuleGuard(highTierExport)] },
+  async (request, reply) => {
+    return { status: "Export generated", downloadUrl: "https://..." };
+  }
+);
+```
+
+---
+
+## 3. High-Throughput Optimization (`compileRule`)
+
+If an endpoint handles thousands of requests per second and you only need boolean pass/fail without verbose audit traces, use `compileRule()` for **5.8M+ ops/sec** throughput:
+
+```ts
+import { compileRule, rule } from "@qarar/sdk";
+import { Request, Response, NextFunction } from "express";
+
+const isAllowedClosure = compileRule(
+  rule("Rate Limit Whitelist Gate")
+    .where("user.tier").eq("vip")
+    .or("user.isInternalTester").eq(true)
+    .build()
+);
+
+export function fastPassMiddleware(req: Request, res: Response, next: NextFunction) {
+  if (!isAllowedClosure(req)) {
+    return res.status(403).json({ error: "Access Denied" });
+  }
+  next();
+}
+```

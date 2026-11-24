@@ -1,20 +1,24 @@
 {
   "name": "@qarar/playground",
-  "version": "0.0.4",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "pnpm --filter @qarar/theme build && pnpm --filter @qarar/react-builder build && pnpm --filter @qarar/sdk build",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint ."
   },
   "dependencies": {
     "@qarar/compiler-mongo": "workspace:*",
     "@qarar/compiler-sql": "workspace:*",
     "@qarar/engine-js": "workspace:*",
+    "@qarar/react-builder": "workspace:*",
     "@qarar/sdk": "workspace:*",
     "@qarar/spec": "workspace:*",
+    "@qarar/theme": "workspace:*",
     "@radix-ui/react-collapsible": "^1.1.13",
     "@radix-ui/react-select": "^2.3.0",
     "@radix-ui/react-separator": "^1.1.9",

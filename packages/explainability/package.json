@@ -1,6 +1,7 @@
 {
   "name": "@qarar/explainability",
-  "version": "0.0.4",
+  "version": "0.1.0",
+  "private": true,
   "description": "Qarar trace → human-readable explanation",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,7 +16,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsc -p tsconfig.json --watch",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "biome lint ."
   },
   "dependencies": {
     "@qarar/engine-js": "workspace:*"

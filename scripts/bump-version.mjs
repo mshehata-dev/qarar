@@ -33,6 +33,9 @@ function parseSemver(v) {
 }
 
 function computeNextVersion(current, bump) {
+  if (bump === "current") {
+    return current;
+  }
   const parsed = parseSemver(current);
   switch (bump) {
     case "patch":

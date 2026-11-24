@@ -1,29 +1,31 @@
 name: Release & Publish
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       bump_type:
-        description: 'Version bump type'
+        description: 'Version strategy: current (keep version in package.json), patch, minor, major, custom'
         required: true
-        default: 'patch'
+        default: 'current'
         type: choice
         options:
+          - current
           - patch
           - minor
           - major
           - custom
       custom_version:
-        description: 'Custom version (required if bump_type is custom, e.g., 0.1.0)'
+        description: 'Custom version (required only if bump_type is custom, e.g., 0.1.0)'
         required: false
         type: string
       dry_run:
-        description: 'Dry run (skip npm publish and git commit)'
+        description: 'Dry run (verify build & tests, check npm packages, skip git push and publish)'
         required: false
         default: false
         type: boolean
+  push:
+    tags:
+      - 'v*.*.*'
 
 concurrency:
   group: release-${{ github.ref }}
@@ -33,8 +35,7 @@ jobs:
   release:
     name: Build, Version, Tag & Publish
     runs-on: ubuntu-latest
-    # Prevent infinite loop if commit message contains [skip ci] or is a release commit
-    if: "!contains(github.event.head_commit.message, '[skip ci]') && !startsWith(github.event.head_commit.message, 'chore(release):')"
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     permissions:
       contents: write
 
@@ -69,7 +70,7 @@ jobs:
           pnpm run typecheck
           pnpm run test
 
-      - name: Determine Version Bump Strategy
+      - name: Determine Target Version
         id: determine_version
         shell: bash
         run: |
@@ -86,33 +87,15 @@ jobs:
               echo "target=$BUMP_TYPE" >> $GITHUB_OUTPUT
             fi
             echo "dry_run=${{ inputs.dry_run }}" >> $GITHUB_OUTPUT
-          else
-            # Automated merge to main: check commit messages since last tag
-            LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-            if [ -z "$LAST_TAG" ]; then
-              COMMITS=$(git log --oneline -n 10)
-            else
-              COMMITS=$(git log ${LAST_TAG}..HEAD --oneline)
-            fi
-
-            echo "Commits since last tag:"
-            echo "$COMMITS"
-
-            # If commits contain breaking change -> major, if feat: -> minor, else -> patch
-            if echo "$COMMITS" | grep -qE "(BREAKING CHANGE|feat!:)"; then
-              echo "Detected breaking change -> major bump"
-              echo "target=major" >> $GITHUB_OUTPUT
-            elif echo "$COMMITS" | grep -qE "feat(\([a-zA-Z0-9_-]+\))?:"; then
-              echo "Detected new feature -> minor bump"
-              echo "target=minor" >> $GITHUB_OUTPUT
-            else
-              echo "Standard change -> patch bump"
-              echo "target=patch" >> $GITHUB_OUTPUT
-            fi
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            # Triggered by Git Tag push (e.g. refs/tags/v0.1.0)
+            TAG_NAME="${GITHUB_REF#refs/tags/v}"
+            echo "Release triggered by tag: $TAG_NAME"
+            echo "target=$TAG_NAME" >> $GITHUB_OUTPUT
             echo "dry_run=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Bump Monorepo Package Versions
+      - name: Apply Monorepo Version
         id: bump
         run: |
           TARGET="${{ steps.determine_version.outputs.target }}"
@@ -124,22 +107,41 @@ jobs:
             node scripts/bump-version.mjs "$TARGET"
           fi
 
-      - name: Build Monorepo with Updated Versions
+      - name: Build Monorepo with Verified Version
         run: pnpm run build
 
-      - name: Commit Version Bump and Tag
+      - name: Commit Version Changes and Create Tag
         if: ${{ steps.determine_version.outputs.dry_run == 'false' }}
         run: |
           NEW_VERSION="${{ steps.bump.outputs.new_version }}"
-          echo "Committing and tagging v${NEW_VERSION}..."
+          echo "Processing git release state for v${NEW_VERSION}..."
           
-          git add -A
-          git commit -m "chore(release): v${NEW_VERSION} [skip ci]"
-          git tag -a "v${NEW_VERSION}" -m "Release v${NEW_VERSION}"
-          git push origin main --follow-tags
+          # Only commit if package.json was modified
+          if ! git diff --quiet package.json; then
+            git add -A
+            git commit -m "chore(release): v${NEW_VERSION} [skip ci]"
+            git push origin HEAD:main
+          fi
+
+          # Tag if not already present
+          if ! git rev-parse "v${NEW_VERSION}" >/dev/null 2>&1; then
+            git tag -a "v${NEW_VERSION}" -m "Release v${NEW_VERSION}"
+            git push origin "v${NEW_VERSION}"
+          fi
+
+      - name: Check NPM_TOKEN Secret
+        id: check_npm
+        shell: bash
+        run: |
+          if [ -z "${{ secrets.NPM_TOKEN }}" ]; then
+            echo "has_token=false" >> $GITHUB_OUTPUT
+            echo "::warning::NPM_TOKEN secret is NOT set in repository secrets. npm publish will be skipped."
+          else
+            echo "has_token=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Publish Packages to npm
-        if: ${{ steps.determine_version.outputs.dry_run == 'false' }}
+        if: ${{ steps.determine_version.outputs.dry_run == 'false' && steps.check_npm.outputs.has_token == 'true' }}
         run: |
           echo "🚀 Publishing public workspace packages to npm..."
           pnpm -r publish --access public --no-git-checks
@@ -159,7 +161,7 @@ jobs:
         run: |
           NEW_VERSION="${{ steps.bump.outputs.new_version }}"
           echo "Creating GitHub Release for v${NEW_VERSION}..."
-          gh release create "v${NEW_VERSION}" \
+          gh release view "v${NEW_VERSION}" >/dev/null 2>&1 || gh release create "v${NEW_VERSION}" \
             --title "v${NEW_VERSION}" \
             --generate-notes
         env:
@@ -173,6 +175,6 @@ jobs:
           if [ "$DRY_RUN" = "true" ]; then
             echo "🏜️ DRY RUN COMPLETE: Packages verified for v${NEW_VERSION}"
           else
-            echo "🎉 RELEASE COMPLETE: v${NEW_VERSION} published successfully!"
+            echo "🎉 RELEASE COMPLETE: v${NEW_VERSION} processed successfully!"
           fi
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
